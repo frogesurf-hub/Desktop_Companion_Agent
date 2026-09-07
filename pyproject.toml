@@ -1,0 +1,35 @@
+[build-system]
+requires = [
+    "setuptools>=68",
+    "wheel"
+]
+build-backend = "setuptools.build_meta"
+
+
+[project]
+name = "desktop-companion-agent"
+version = "0.1.0"
+description = "A personal desktop AI companion agent."
+requires-python = ">=3.11"
+
+dependencies = [
+    "python-dotenv",
+    "pydantic",
+    "requests",
+    "websockets",
+    "sqlalchemy"
+]
+
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+
+[tool.pytest.ini_options]
+pythonpath = [
+    "src"
+]
+
+testpaths = [
+    "src/AgentCore/tests"
+]
