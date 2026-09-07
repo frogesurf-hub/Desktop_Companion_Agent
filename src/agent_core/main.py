@@ -1,16 +1,17 @@
+import asyncio
 import logging
 
+from agent_core.communication import WebSocketServer
 from agent_core.config import get_settings
+from agent_core.core.agent import Agent
 from agent_core.observability import setup_logging
 
 logger = logging.getLogger(__name__)
 
 
-def main() -> None:
+async def run() -> None:
     """
-    Desktop Companion Agent Core 的应用入口。
-
-    负责初始化运行时基础设施，并启动 Agent Core。
+    初始化并运行 Desktop Companion Agent Core。
     """
 
     settings = get_settings()
@@ -43,6 +44,26 @@ def main() -> None:
         "WebSocket endpoint: %s:%s",
         settings.websocket_host,
         settings.websocket_port,
+    )
+
+    agent = Agent()
+
+    server = WebSocketServer(
+        host=settings.websocket_host,
+        port=settings.websocket_port,
+        agent=agent,
+    )
+
+    await server.run()
+
+
+def main() -> None:
+    """
+    Desktop Companion Agent Core 的同步程序入口。
+    """
+
+    asyncio.run(
+        run(),
     )
 
 

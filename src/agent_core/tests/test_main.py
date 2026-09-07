@@ -1,11 +1,19 @@
+import asyncio
+
 from agent_core import main as main_module
 
 
-def test_main_initializes_runtime(
+def test_run_initializes_runtime(
     monkeypatch,
 ) -> None:
     """
-    验证 main() 会读取配置、初始化日志并输出启动信息。
+    验证 run() 会：
+
+    1. 读取 Settings
+    2. 初始化 Logging
+    3. 创建 Agent
+    4. 创建 WebSocketServer
+    5. 启动 WebSocketServer
     """
 
     calls: list[tuple[str, object]] = []
@@ -18,6 +26,32 @@ def test_main_initializes_runtime(
         websocket_host = "127.0.0.1"
         websocket_port = 9999
         log_level = "DEBUG"
+
+    class FakeAgent:
+        pass
+
+    class FakeWebSocketServer:
+        def __init__(
+            self,
+            host: str,
+            port: int,
+            agent: FakeAgent,
+        ) -> None:
+            calls.append(
+                (
+                    "server_init",
+                    (
+                        host,
+                        port,
+                        agent,
+                    ),
+                )
+            )
+
+        async def run(self) -> None:
+            calls.append(
+                ("server_run", None),
+            )
 
     def fake_get_settings() -> FakeSettings:
         calls.append(
@@ -44,9 +78,35 @@ def test_main_initializes_runtime(
         fake_setup_logging,
     )
 
-    main_module.main()
+    monkeypatch.setattr(
+        main_module,
+        "Agent",
+        FakeAgent,
+    )
 
-    assert calls == [
-        ("get_settings", None),
-        ("setup_logging", "DEBUG"),
-    ]
+    monkeypatch.setattr(
+        main_module,
+        "WebSocketServer",
+        FakeWebSocketServer,
+    )
+
+    asyncio.run(
+        main_module.run(),
+    )
+
+    assert calls[0] == (
+        "get_settings",
+        None,
+    )
+
+    assert calls[1] == (
+        "setup_logging",
+        "DEBUG",
+    )
+
+    assert calls[2][0] == "server_init"
+
+    assert calls[3] == (
+        "server_run",
+        None,
+    )
