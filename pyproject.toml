@@ -1,7 +1,7 @@
 [build-system]
 requires = [
     "setuptools>=68",
-    "wheel"
+    "wheel",
 ]
 build-backend = "setuptools.build_meta"
 
@@ -10,14 +10,23 @@ build-backend = "setuptools.build_meta"
 name = "desktop-companion-agent"
 version = "0.1.0"
 description = "A personal desktop AI companion agent."
-requires-python = ">=3.11"
+requires-python = ">=3.11,<3.12"
 
 dependencies = [
     "python-dotenv",
     "pydantic",
+    "pydantic-settings",
     "requests",
     "websockets",
-    "sqlalchemy"
+    "sqlalchemy",
+]
+
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "ruff",
+    "mypy",
 ]
 
 
@@ -27,9 +36,30 @@ where = ["src"]
 
 [tool.pytest.ini_options]
 pythonpath = [
-    "src"
+    "src",
 ]
-
 testpaths = [
     "src/agent_core/tests",
 ]
+
+
+[tool.ruff]
+line-length = 88
+target-version = "py311"
+
+
+[tool.ruff.lint]
+select = [
+    "E",
+    "F",
+    "I",
+    "UP",
+]
+
+
+[tool.mypy]
+python_version = "3.11"
+check_untyped_defs = true
+disallow_untyped_defs = false
+warn_unused_ignores = true
+warn_return_any = true
