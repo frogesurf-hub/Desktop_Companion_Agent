@@ -258,3 +258,106 @@
     Optional Online Intelligence
 
 云服务失败时可以降级。
+
+------------------------------------------------------------------------
+
+# 15. Phase 0 Implemented Baseline
+
+The sections above describe the long-term target architecture. As of the Phase 0 checkpoint (2026-09-08), the implemented vertical slice is intentionally smaller.
+
+## 15.1 Current Desktop Runtime
+
+```text
+App.xaml.cs
+  -> MainWindow
+  -> MainWindowViewModel
+  -> AgentClientService
+  -> IAgentConnection
+  -> WebSocketAgentConnection
+  -> AgentMessage
+```
+
+Responsibilities:
+
+- `App.xaml.cs`: Desktop composition root
+- `MainWindow`: WPF view and UI event forwarding
+- `MainWindowViewModel`: presentation state and user interaction
+- `AgentClientService`: application-level chat behavior and independent receive loop
+- `IAgentConnection`: transport abstraction
+- `WebSocketAgentConnection`: WebSocket + JSON transport implementation
+- `AgentMessage`: C# representation of the protocol envelope
+
+The independent receive loop is an intentional architectural requirement for future proactive messages.
+
+## 15.2 Current Python Runtime
+
+```text
+main.py
+  -> Settings
+  -> Logging
+  -> Agent
+  -> WebSocketServer
+  -> Message
+```
+
+Responsibilities:
+
+- `main.py`: Python composition root and async runtime entry
+- `Settings`: environment / `.env` runtime configuration
+- `Logging`: console + rotating-file observability
+- `WebSocketServer`: connection lifecycle, protocol parsing, error isolation, response transport
+- `Message`: Python protocol envelope
+- `Agent`: current processing boundary; Phase 0 implementation is an echo stub
+
+## 15.3 Current Cross-Process Flow
+
+```text
+WPF UI
+  -> AgentClientService
+  -> WebSocketAgentConnection
+  -> ws://127.0.0.1:8765
+  -> WebSocketServer
+  -> Message.from_json()
+  -> Agent.process_message()
+  -> Message.to_json()
+  -> WebSocketAgentConnection
+  -> MainWindowViewModel
+  -> WPF UI
+```
+
+Phase 0 verified this flow using both:
+
+- `tools/DesktopCompanion.ConnectionProbe`
+- the real WPF UI
+
+## 15.4 Not Implemented Yet
+
+The following target-architecture modules remain design-level only:
+
+- Character Core
+- Memory System
+- Internal State
+- Perception Layer
+- Situation Engine
+- Attention Engine
+- Behavior Engine
+- Permission Layer
+- Action / Tool Layer
+- Embodiment Layer
+- Event Bus
+- LLM Provider implementations
+- Local-model routing
+
+Do not infer implementation merely because a module exists in the target diagram.
+
+## 15.5 Boundary Rule
+
+Future implementation should extend the current vertical slice without collapsing layers.
+
+In particular:
+
+- UI must not own WebSocket / provider / memory logic
+- WebSocket must not own Agent construction
+- provider-specific code must not become the Agent Core API
+- proactive behavior must use an event/attention path rather than UI polling
+- sensitive actions must pass through Permission Layer

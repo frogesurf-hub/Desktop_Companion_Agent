@@ -1,250 +1,283 @@
 # Third Party References
 
+This file is a reference register, not a dependency manifest.
+
+Its purpose is to preserve what the project learned from external work and to prevent future developers or development AIs from rediscovering or copying code without understanding licensing and architectural fit.
+
 ## 1. OpenMeido
 
 Repository:
+
+```text
 https://github.com/OpenMeido/OpenMeido
+```
 
-License:
+Phase 0 recorded license:
+
+```text
 GPL-3.0
+```
 
-Purpose:
+Primary value to this project:
 
-作为桌面 AI Companion 的原型参考。
+- desktop-companion product shape
+- Live2D integration patterns
+- Persona / character configuration ideas
+- memory architecture lessons
+- TTS integration ideas
+- provider abstraction
+- proactive observation / interaction patterns
 
-主要参考：
+Phase 0 decision:
 
-- 桌面透明窗口
-- 桌宠形态
-- Live2D 集成方式
-- Persona 系统
-- Memory 系统
-- TTS 接入
-- LLM Provider 抽象
-- 主动互动设计
+- useful as an architecture / prototype reference
+- do not casually copy code into a differently licensed public project
+- if a distributed derivative directly incorporates GPL code, GPL obligations must be reviewed before distribution
 
-备注：
+Important memory lesson preserved from early research:
 
-可能用于早期原型验证。
-
-如果直接基于其代码开发，需要遵守 GPL-3.0。
-
+- temporary work state should not automatically become long-term facts
+- work context, personal facts, and durable memory need explicit separation
 
 ---
 
 ## 2. Project AIRI
 
 Repository:
+
+```text
 https://github.com/moeru-ai/airi
+```
 
-License:
+Phase 0 recorded license:
+
+```text
 MIT
+```
 
-Purpose:
+Primary value:
 
-参考数字生命 / AI Companion 的整体设计。
+- digital-life / AI Companion framing
+- Live2D / VRM embodiment
+- voice interaction
+- plugin / extension thinking
+- multi-platform companion runtime ideas
 
-主要参考：
+Phase 0 decision:
 
-- Live2D / VRM Avatar
-- 角色表现系统
-- 插件化思想
-- 语音交互
-- Agent 扩展能力
-- 多平台设计
-- 长期数字生命理念
-
-备注：
-
-重点参考设计思想，而不是直接复制完整架构。
-
-AIRI 的目标也是构建自托管 AI Companion，支持 Live2D、VRM、语音交互等能力。:contentReference[oaicite:0]{index=0}
-
+Use AIRI primarily to study digital-life and embodiment architecture. Do not copy its entire product architecture into this project because Desktop Companion Agent has a different core emphasis: desktop situation understanding, attention, and permission-controlled capabilities.
 
 ---
 
 ## 3. screenpipe
 
 Repository:
+
+```text
 https://github.com/screenpipe/screenpipe
+```
 
-License:
-待确认具体版本许可证
+Primary value:
 
-Purpose:
-
-参考桌面感知系统。
-
-主要参考：
-
-- Screen Context
+- desktop context acquisition
 - Activity Timeline
-- Accessibility Tree
-- Event-driven Observation
-- 本地数据处理
+- accessibility-first observation
+- event-driven sensing
+- local context processing
 
-设计启发：
+Architecture lesson:
 
-不要持续把整个屏幕发送给 AI。
+```text
+Event / accessibility / native context
+  -> timeline / structured context
+  -> screenshot only when needed
+  -> AI interpretation when valuable
+```
 
-应该：
+Do not build the perception system as continuous screenshot streaming.
 
-事件
-↓
-上下文
-↓
-必要时截图
-↓
-AI理解
+Phase 0 license policy:
 
+- treat screenpipe source as license-sensitive / restricted until the exact version and intended use are verified
+- architecture can be studied
+- do not copy source into a future public/distributed repository without a fresh license review
 
 ---
 
 ## 4. Microsoft UFO
 
 Repository:
+
+```text
 https://github.com/microsoft/UFO
+```
 
-License:
+Phase 0 recorded license:
+
+```text
 MIT
+```
 
-Purpose:
-
-参考 Windows Agent 和电脑操作能力。
-
-主要参考：
+Primary value:
 
 - Windows UI Automation
-- Application Agent
-- GUI 操作
-- Desktop Environment Understanding
+- Windows-native application interaction
+- application-agent concepts
+- desktop environment understanding
 
-用于未来：
+Long-term capability priority informed by this reference:
 
-- 软件控制
-- 自动操作
-- Computer Use
+```text
+API / explicit tool
+  -> OS-native interface
+  -> UI Automation
+  -> vision + mouse fallback
+```
 
+The project should not default to visual clicking when a structured Windows interface exists.
 
 ---
 
 ## 5. Agent-S
 
 Repository:
+
+```text
 https://github.com/simular-ai/Agent-S
+```
 
-License:
+Phase 0 recorded license:
+
+```text
 Apache-2.0
+```
 
-Purpose:
+Primary value:
 
-参考 Computer Use Agent 架构。
+- computer-use agent architecture
+- GUI interaction
+- action execution
+- visual fallback strategies
 
-主要参考：
+Phase 0 decision:
 
-- Agent Planning
-- GUI Interaction
-- Tool Use
-- Action Execution
-
-用于未来高级自动化能力。
-
+Agent-S is a future fallback reference for tasks where native APIs / UI Automation cannot provide enough information. Vision-based computer use should remain lower priority than structured interfaces.
 
 ---
 
 ## 6. Open-LLM-VTuber
 
 Repository:
+
+```text
 https://github.com/Open-LLM-VTuber/Open-LLM-VTuber
+```
 
-License:
-待确认
-
-Purpose:
-
-参考开源 AI VTuber 实现。
-
-主要参考：
+Primary value:
 
 - Live2D
-- Voice Pipeline
-- Offline AI Companion
-- Character Customization
+- voice pipeline
+- offline companion patterns
+- character customization
 
-适合作为 Avatar + Voice 系统参考。
+Status:
 
+Secondary future reference for Avatar + Voice. Verify the exact license/version before copying or integrating code.
 
 ---
 
 ## 7. SillyTavern
 
 Repository:
+
+```text
 https://github.com/SillyTavern/SillyTavern
+```
 
-License:
+Phase 0 recorded license:
+
+```text
 AGPL-3.0
+```
 
-Purpose:
+Primary value:
 
-参考角色聊天系统。
+- Character Card / Persona representation
+- lore / contextual character data
+- long-context interaction patterns
+- user-defined character configuration
 
-主要参考：
+Decision:
 
-- Character Card
-- Persona
-- Lore
-- 长上下文管理
-- 用户自定义角色
-
-不直接作为核心架构。
-
+Reference character-system ideas only; it is not the core architecture for this desktop companion runtime.
 
 ---
 
 ## 8. Mem0
 
 Repository:
+
+```text
 https://github.com/mem0ai/mem0
+```
 
-License:
+Phase 0 recorded license:
+
+```text
 Apache-2.0
+```
 
-Purpose:
+Primary value:
 
-参考 AI Memory 系统。
+- durable memory concepts
+- memory retrieval
+- user information storage
+- memory update strategies
 
-主要参考：
+Decision:
 
-- 长期记忆管理
-- Memory Retrieval
-- 用户信息存储
-- 记忆更新策略
-
+Use as one memory-system reference when Phase 4 begins. The project's memory domains and truth/fiction separation remain project-owned decisions.
 
 ---
 
 ## 9. LangGraph
 
 Repository:
+
+```text
 https://github.com/langchain-ai/langgraph
+```
 
-License:
+Phase 0 recorded license:
+
+```text
 MIT
+```
 
-Purpose:
+Primary value:
 
-参考 Agent Workflow。
+- workflow / state-machine patterns
+- multi-step Agent execution
+- state transition modeling
 
-主要参考：
+Decision:
 
-- 状态机
-- Agent Graph
-- 多步骤任务流程
-- 状态管理
-
+Reference workflow ideas. Do not hard-bind the Agent Core to LangGraph unless a future subsystem demonstrates that the dependency is justified.
 
 ---
 
 # Reference Philosophy
 
-本项目遵循：
+Desktop Companion Agent follows these rules:
+
+1. **Reference, do not blindly fork.** External projects solve adjacent problems; this project owns its core companion architecture.
+2. **Architecture lesson != code license.** An idea can be learned without copying implementation.
+3. **License before code reuse.** Before adapting or copying code, record the exact repository, version/commit, license, and intended distribution model.
+4. **Prefer explicit classification.** Every external use should be identified as one of:
+   - architectural inspiration
+   - adapted implementation
+   - copied component
+   - external runtime/service integration
+5. **Core systems stay replaceable.** LLM, TTS, vision, memory, avatar, tools, and app adapters should remain behind stable interfaces where practical.
+6. **Project-specific differentiators remain custom.** Situation Engine, Attention Engine, Permission architecture, memory-domain boundaries, and companion behavior should not become accidental copies of another product.
+7. **Re-check licenses before distribution.** This file records Phase 0 understanding and policy; it is not a substitute for a fresh license check before publishing or distributing third-party-derived code.

@@ -47,39 +47,52 @@ Expected:
 Python 3.11.x
 ```
 
-### Install Runtime Dependencies
+### Install Project and Development Dependencies
+
+The canonical development installation is:
 
 ```powershell
-pip install -r src/agent_core/requirements.txt
+pip install -e ".[dev]"
 ```
 
-### Install Development Tools
+This installs:
 
-```powershell
-pip install ruff mypy
-```
+- runtime dependencies declared in `pyproject.toml`
+- development dependencies from the `dev` extra (`pytest`, `ruff`, `mypy`)
+- the current project in editable mode
+
+`src/agent_core/requirements.txt` still exists at the Phase 0 checkpoint, but it duplicates dependency information and is a cleanup candidate. Do not add new dependencies to only one of the two files without deciding the canonical dependency policy.
 
 ---
 
 ## 2. Project Structure
 
-Current high-level structure:
+Phase 0 high-level structure:
 
 ```text
 Desktop_Companion_Agent
 ├── docs
+│   ├── adr
+│   ├── COMMUNICATION_PROTOCOL.md
+│   ├── DEVELOPMENT.md
+│   └── PHASE_0_CHECKPOINT.md
 ├── src
 │   ├── agent_core
 │   │   ├── communication
 │   │   ├── config
 │   │   ├── core
-│   │   └── tests
+│   │   ├── observability
+│   │   ├── tests
+│   │   └── main.py
 │   └── Desktop
 │       └── DesktopCompanion.Desktop
-├── tests
+├── tools
+│   └── DesktopCompanion.ConnectionProbe
 ├── .editorconfig
+├── .env.example
 ├── .gitignore
 ├── pyproject.toml
+├── PROJECT_STATE.md
 ├── ARCHITECTURE.md
 ├── DESIGN.md
 ├── MVP_DESIGN.md
@@ -92,12 +105,15 @@ Desktop_Companion_Agent
 
 Responsibilities:
 
-- `src/agent_core/`: Python Agent Core and related services.
+- `src/agent_core/`: Python Agent Core runtime and tests.
 - `src/Desktop/`: C# WPF desktop application.
-- `docs/`: detailed technical documentation and protocols.
-- `tests/`: repository-level tests when cross-module tests are introduced.
-- `pyproject.toml`: Python project metadata and development-tool configuration.
-- root Markdown files: project-level design, roadmap, architecture, and policy documents.
+- `tools/DesktopCompanion.ConnectionProbe/`: transport/protocol diagnostic client.
+- `docs/`: technical documentation, checkpoint history, and ADRs.
+- `pyproject.toml`: Python project metadata, dependencies, pytest, Ruff, and mypy configuration.
+- `PROJECT_STATE.md`: primary context-recovery / current-state document.
+- root Markdown files: project-level architecture, design, roadmap, technology, and third-party policies.
+
+Known Phase 0 cleanup: the C# protocol source folder is physically named `Potocol/` even though the namespace is `DesktopCompanion.Desktop.Protocol`; rename the folder to `Protocol/` in a dedicated cleanup commit.
 
 ---
 
@@ -583,17 +599,39 @@ A development task is complete when all relevant items are satisfied:
 
 ## 20. Current Development Baseline
 
-Current baseline:
+Phase 0 baseline (2026-09-08):
 
-- Windows 11
+- Windows 11 primary environment
 - C# WPF desktop layer
+- .NET 8 Windows project target
 - Python 3.11 Agent Core
-- SQLite planned as primary persistent database
-- WebSocket planned for Desktop ↔ Agent Core communication
-- DeepSeek API planned as primary cloud LLM provider
-- provider abstraction required
-- local model support planned
-- pytest configured through `pyproject.toml`
-- Git used for all development history
+- `pyproject.toml` as the Python project/build configuration
+- pytest discovery under `src/agent_core/tests`
+- Ruff and mypy integrated into normal development checks
+- `pydantic-settings` runtime configuration with `.env` support
+- console + rotating-file Python logging
+- local WebSocket implemented for Desktop <-> Agent Core communication
+- JSON message envelope implemented in both Python and C#
+- protocol error isolation implemented for malformed input
+- C# `IAgentConnection` transport abstraction implemented
+- C# independent receive loop implemented for future proactive messages
+- ConnectionProbe available for transport diagnostics
+- WPF ViewModel + Application Service layering implemented
+- real WPF <-> Python echo-Agent round trip verified
+- SQLite remains planned as the first persistent database
+- DeepSeek remains planned as the first cloud LLM provider
+- provider abstraction is required before DeepSeek integration
+- local-model support remains planned
+- Git is the source of development history
 
-This document should evolve as the project matures.
+Important distinction:
+
+- Phase 0 cross-language runtime foundation is complete.
+- The original AI MVP is not complete until a real LLM provider path is connected.
+
+Context-recovery documents:
+
+- `PROJECT_STATE.md`
+- `docs/PHASE_0_CHECKPOINT.md`
+
+This document should continue evolving with each major runtime phase.

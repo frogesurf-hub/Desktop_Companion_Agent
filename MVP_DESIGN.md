@@ -1,8 +1,48 @@
 # Desktop Companion Agent - MVP Design
 
+## 0. Phase 0 Checkpoint Note
+
+The original MVP definition in this document includes a real LLM provider call.
+
+Phase 0 completed the technical foundation and cross-language vertical slice, but intentionally stopped before DeepSeek integration.
+
+Current verified path:
+
+```text
+WPF Desktop
+  -> WebSocket
+  -> Python Agent Core
+  -> echo Agent stub
+  -> WebSocket
+  -> WPF Desktop
+```
+
+Original full MVP target remains:
+
+```text
+WPF Desktop
+  -> WebSocket
+  -> Python Agent Core
+  -> LLM Provider abstraction
+  -> DeepSeek API
+  -> Python Agent Core
+  -> WebSocket
+  -> WPF Desktop
+```
+
+Therefore:
+
+- Phase 0: **complete**
+- Original AI MVP: **not yet complete**
+- Phase 1 should complete the provider / DeepSeek section without coupling the Agent to one vendor.
+
+See `PROJECT_STATE.md` and `docs/PHASE_0_CHECKPOINT.md` for the current repository state.
+
+---
+
 ## 1. MVP Overview
 
-## Project Goal
+### Project Goal
 
 Desktop Companion Agent 的最终目标：
 
@@ -10,358 +50,271 @@ Desktop Companion Agent 的最终目标：
 
 它不是传统聊天机器人，而是：
 
--   长驻桌面的智能伙伴
--   可以感知用户部分电脑状态
--   根据情境主动互动
--   支持文字交流
--   具备角色、自定义、记忆、情绪等能力
+- 长驻桌面的智能伙伴
+- 可以感知用户部分电脑状态
+- 根据情境主动互动
+- 支持文字交流
+- 具备角色、自定义、记忆、情绪等能力
 
 但是 MVP 阶段不实现完整系统。
 
 MVP 的目标：
 
-> 验证 Desktop Layer + Agent Core + LLM 通信链路。
+> 验证 Desktop Layer + Agent Core + LLM Provider 的完整通信链路。
 
-------------------------------------------------------------------------
+---
 
-# 2. MVP Scope
+## 2. MVP Scope
 
-## Included
-
-## Desktop Layer
+### Desktop Layer
 
 技术：
 
-    C# WPF
+```text
+C# WPF
+```
 
 功能：
 
--   启动桌面程序
--   显示基础窗口
--   输入文本
--   显示 Agent 回复
+- 启动桌面程序
+- 显示基础窗口
+- 输入文本
+- 显示 Agent 回复
+- 与 Agent Core 建立长连接
+- 独立接收 Agent 主动消息
 
-------------------------------------------------------------------------
+Phase 0 status: implemented at foundation level.
 
-## Agent Core
+### Agent Core
 
 技术：
 
-    Python
+```text
+Python 3.11
+```
 
 功能：
 
--   接收用户输入
--   管理 Agent 基础逻辑
--   调用 LLM
--   返回回复
+- 接收协议消息
+- 管理 Agent 基础逻辑
+- 调用 LLM Provider
+- 返回统一协议消息
 
-------------------------------------------------------------------------
+Phase 0 status:
 
-## LLM Provider
+- protocol/runtime path implemented
+- LLM provider not implemented
 
-第一阶段：
+### LLM Provider
 
-    DeepSeek API
+First provider:
 
-通过抽象接口设计。
+```text
+DeepSeek API
+```
 
-未来支持：
+Required design:
 
--   OpenAI API
--   Claude API
--   Gemini API
--   Local Model
+```text
+Agent Core
+  -> Provider Interface
+  -> DeepSeek Adapter
+```
 
-------------------------------------------------------------------------
+Future providers may include:
 
-## Communication
+- OpenAI-compatible providers
+- Claude
+- Gemini
+- Local Model adapters
 
-MVP 使用：
+The Agent Core must not hard-code one provider SDK as its core interface.
 
-    WebSocket
+### Communication
 
-结构：
+MVP transport:
 
-    C# Desktop
+```text
+WebSocket
+```
 
-            ↕
+Reason:
 
-    Python Agent Core
+Future runtime requires:
 
-原因：
+- proactive messages
+- state events
+- permission requests
+- real-time communication
 
-未来需要支持：
+Phase 0 status: implemented and verified end-to-end.
 
--   主动消息
--   状态事件
--   实时通信
+---
 
-提前建立事件通信模式。
+## 3. MVP Not Included
 
-------------------------------------------------------------------------
-
-# 3. MVP Not Included
-
-以下功能暂不实现：
-
-## 不包含：
+Not part of the initial AI MVP unless needed by the provider boundary:
 
 ### Computer Perception
 
-暂不检测：
-
--   当前软件
--   鼠标键盘
--   浏览记录
--   文件变化
-
-------------------------------------------------------------------------
+- current application detection
+- mouse / keyboard activity
+- browser history
+- file-change observation
 
 ### Memory System
 
-暂不实现：
-
--   长期记忆
--   向量数据库
--   用户画像
-
-------------------------------------------------------------------------
+- long-term memory
+- vector retrieval
+- user profile learning
 
 ### Emotion System
 
-暂不实现：
-
--   心情变化
--   天气影响
--   虚拟经历
-
-------------------------------------------------------------------------
+- mood simulation
+- weather influence
+- fictional daily-life state
 
 ### Avatar System
 
-暂不实现：
-
--   Live2D
--   动画
--   声音
--   桌宠交互
-
-------------------------------------------------------------------------
+- Live2D
+- animation
+- voice
+- desktop physical interaction
 
 ### Tool System
 
-暂不开放：
+- file operations
+- browser control
+- system operations
 
--   文件操作
--   浏览器控制
--   系统操作
+---
 
-------------------------------------------------------------------------
+## 4. MVP Architecture
 
-# 4. MVP Architecture
+```text
+User
+  |
+WPF Desktop
+  |
+WebSocket
+  |
+Python Agent Core
+  |
+Provider Interface
+  |
+DeepSeek Adapter
+  |
+DeepSeek API
+```
 
-                     User
+Phase 0 has implemented everything above through `Python Agent Core`, with a stub Agent response in place of the provider path.
 
-                      |
-                      |
+---
 
-              C# WPF Desktop
+## 5. Module Responsibility
 
-                      |
+### DesktopCompanion.Desktop
 
-                  WebSocket
+Responsible for:
 
-                      |
+- Windows view / UI
+- user input
+- message display
+- connection state
+- protocol transport through an abstraction
 
-              Python Agent Core
+Must not own:
 
-                      |
+- LLM provider logic
+- memory
+- Agent reasoning
 
-               LLM Provider API
+### Agent Core
 
-                      |
+Responsible for:
 
-                 DeepSeek API
+- Agent runtime entry
+- protocol handling
+- Agent processing boundary
+- provider orchestration
+- future memory / behavior integration
 
-------------------------------------------------------------------------
+### Communication Layer
 
-# 5. Module Responsibility
+Responsible for:
 
-## DesktopCompanion.Desktop
+- message envelope
+- long-lived connection
+- transport errors
+- future state/event delivery
 
-负责：
+---
 
--   Windows窗口
--   UI显示
--   用户输入
--   消息发送
--   消息接收
+## 6. MVP Completion Criterion
 
-------------------------------------------------------------------------
+The original MVP is complete when a user can:
 
-## AgentCore
+1. start Agent Core
+2. start Desktop
+3. connect through WebSocket
+4. type `你好`
+5. send a `chat` message
+6. have Python call a real provider through an abstraction
+7. receive a real LLM response
+8. display the response in WPF
 
-负责：
+Phase 0 already verifies steps 1-5 and 8 using the echo Agent.
 
--   Agent入口
--   对话流程
--   LLM调用
--   基础配置
+Phase 1 should complete steps 6-7 and re-run the full end-to-end acceptance manually.
 
-------------------------------------------------------------------------
+---
 
-## Communication Layer
+## 7. Development Principles
 
-负责：
+### Keep Modules Independent
 
--   消息格式
--   长连接
--   状态同步
+Avoid:
 
-------------------------------------------------------------------------
+- UI binding directly to Agent internals
+- Agent binding directly to one provider SDK
+- persistent storage binding directly to presentation code
 
-# 6. First Milestone
+### Prepare for Proactivity
 
-完成标准：
+Desktop receiving must remain independent of user send actions so future Agent events can arrive without polling.
 
-启动程序：
+### Security First
 
-    Desktop App
+Any future system action must pass through user-visible permission boundaries.
 
-输入：
+```text
+Character Intent != System Permission
+```
 
-    你好
+---
 
-流程：
+## 8. After MVP
 
-    用户输入
+After the original LLM MVP is completed, continue with the repository `ROADMAP.md` rather than the older phase numbering that previously appeared in this document.
 
-    ↓
+The roadmap is the authoritative phase sequence after the 2026-09-08 Phase 0 re-baseline.
 
-    C# WPF
+---
 
-    ↓
+## 9. MVP Meaning
 
-    WebSocket
+MVP is not the final companion.
 
-    ↓
+It proves that the following chain is technically stable:
 
-    Python Agent
+```text
+Desktop
++
+Agent Core
++
+Provider
++
+Communication
+```
 
-    ↓
-
-    DeepSeek API
-
-    ↓
-
-    Python返回
-
-    ↓
-
-    C#显示回复
-
-最终效果：
-
-桌面程序能够完成一次完整 AI 对话。
-
-------------------------------------------------------------------------
-
-# 7. Development Principles
-
-## Keep Modules Independent
-
-避免：
-
--   UI绑定Agent逻辑
--   API绑定具体模型
--   数据库绑定业务
-
-------------------------------------------------------------------------
-
-## Prepare For Expansion
-
-MVP代码需要预留：
-
-未来模块：
-
-    Memory
-
-    Emotion
-
-    Personality
-
-    Avatar
-
-    Tools
-
-    Permission
-
-    Perception
-
-------------------------------------------------------------------------
-
-## Security First
-
-任何系统操作：
-
-必须经过：
-
-    User Permission Layer
-
-Agent主动性不能覆盖用户权限。
-
-------------------------------------------------------------------------
-
-# 8. After MVP Roadmap
-
-MVP完成后：
-
-Phase 1:
-
--   Agent基础框架
--   角色配置
--   Prompt系统
-
-Phase 2:
-
--   Memory System
--   用户信息
-
-Phase 3:
-
--   Perception System
--   软件状态检测
-
-Phase 4:
-
--   Emotion System
--   主动行为
-
-Phase 5:
-
--   Avatar
--   Voice
--   Desktop Companion体验
-
-------------------------------------------------------------------------
-
-# 9. MVP Definition
-
-MVP不是最终产品。
-
-它的意义：
-
-证明：
-
-    Desktop
-    +
-    Agent Core
-    +
-    LLM
-    +
-    Communication
-
-这条技术路线可行。
-
-之后所有复杂功能都建立在该基础之上。
+Character, memory, perception, attention, behavior, tools, avatar, and voice are built on top of that verified foundation.
