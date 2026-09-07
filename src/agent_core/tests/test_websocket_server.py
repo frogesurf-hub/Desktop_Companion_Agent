@@ -7,6 +7,8 @@ import pytest
 from websockets.asyncio.client import ClientConnection, connect
 
 from agent_core.communication import WebSocketServer
+from agent_core.core.agent import Agent
+from agent_core.core.message import Message
 
 
 def _get_free_port() -> int:
@@ -31,9 +33,6 @@ async def _connect_with_retry(
 ) -> ClientConnection:
     """
     等待 WebSocket Server 启动并建立连接。
-
-    Server 和 Client 是并发启动的，因此允许短时间重试，
-    避免测试依赖固定的 sleep 时间。
     """
 
     last_error: OSError | None = None
@@ -76,6 +75,7 @@ def test_websocket_server_connection_lifecycle(
         server = WebSocketServer(
             host="127.0.0.1",
             port=port,
+            agent=Agent(),
         )
 
         server_task = asyncio.create_task(
@@ -109,6 +109,319 @@ def test_websocket_server_connection_lifecycle(
             )
 
             assert not server_task.done()
+
+        finally:
+            server_task.cancel()
+
+            with suppress(asyncio.CancelledError):
+                await server_task
+
+    asyncio.run(scenario())
+
+
+def test_websocket_server_message_round_trip() -> None:
+    """
+    验证客户端发送 chat Message 后，
+    WebSocket Server 会调用 Agent 并返回 response Message。
+    """
+
+    async def scenario() -> None:
+        port = _get_free_port()
+
+        server = WebSocketServer(
+            host="127.0.0.1",
+            port=port,
+            agent=Agent(),
+        )
+
+        server_task = asyncio.create_task(
+            server.run(),
+        )
+
+        try:
+            client = await _connect_with_retry(
+                f"ws://127.0.0.1:{port}"
+            )
+
+            message = Message(
+                type="chat",
+                source="desktop",
+                payload={
+                    "message": "你好",
+                },
+            )
+
+            await client.send(
+                message.to_json(),
+            )
+
+            raw_response = await client.recv()
+
+            assert isinstance(
+                raw_response,
+                str,
+            )
+
+            response = Message.from_json(
+                raw_response,
+            )
+
+            assert response.type == "response"
+
+            assert (
+                response.payload["message"]
+                == "收到你的消息: 你好"
+            )
+
+            await client.close()
+
+        finally:
+            server_task.cancel()
+
+            with suppress(asyncio.CancelledError):
+                await server_task
+
+    asyncio.run(scenario())
+
+def test_websocket_server_rejects_invalid_json() -> None:
+    """
+    验证非法 JSON 会返回 error Message，
+    而不是关闭 WebSocket 连接。
+    """
+
+    async def scenario() -> None:
+        port = _get_free_port()
+
+        server = WebSocketServer(
+            host="127.0.0.1",
+            port=port,
+            agent=Agent(),
+        )
+
+        server_task = asyncio.create_task(
+            server.run(),
+        )
+
+        try:
+            client = await _connect_with_retry(
+                f"ws://127.0.0.1:{port}"
+            )
+
+            await client.send(
+                "this is not json",
+            )
+
+            raw_response = await client.recv()
+
+            assert isinstance(
+                raw_response,
+                str,
+            )
+
+            response = Message.from_json(
+                raw_response,
+            )
+
+            assert response.type == "error"
+
+            assert (
+                response.payload["message"]
+                == "Invalid JSON message"
+            )
+
+            await client.close()
+
+        finally:
+            server_task.cancel()
+
+            with suppress(asyncio.CancelledError):
+                await server_task
+
+    asyncio.run(scenario())
+
+def test_websocket_server_rejects_invalid_message_structure() -> None:
+    """
+    验证缺少协议字段的 JSON 会返回 error Message。
+    """
+
+    async def scenario() -> None:
+        port = _get_free_port()
+
+        server = WebSocketServer(
+            host="127.0.0.1",
+            port=port,
+            agent=Agent(),
+        )
+
+        server_task = asyncio.create_task(
+            server.run(),
+        )
+
+        try:
+            client = await _connect_with_retry(
+                f"ws://127.0.0.1:{port}"
+            )
+
+            await client.send(
+                '{"type": "chat"}',
+            )
+
+            raw_response = await client.recv()
+
+            assert isinstance(
+                raw_response,
+                str,
+            )
+
+            response = Message.from_json(
+                raw_response,
+            )
+
+            assert response.type == "error"
+
+            assert (
+                response.payload["message"]
+                == "Invalid message structure"
+            )
+
+            await client.close()
+
+        finally:
+            server_task.cancel()
+
+            with suppress(asyncio.CancelledError):
+                await server_task
+
+    asyncio.run(scenario())
+
+def test_websocket_server_rejects_binary_message() -> None:
+    """
+    验证 Binary WebSocket 消息会返回协议错误。
+    """
+
+    async def scenario() -> None:
+        port = _get_free_port()
+
+        server = WebSocketServer(
+            host="127.0.0.1",
+            port=port,
+            agent=Agent(),
+        )
+
+        server_task = asyncio.create_task(
+            server.run(),
+        )
+
+        try:
+            client = await _connect_with_retry(
+                f"ws://127.0.0.1:{port}"
+            )
+
+            await client.send(
+                b"binary-message",
+            )
+
+            raw_response = await client.recv()
+
+            assert isinstance(
+                raw_response,
+                str,
+            )
+
+            response = Message.from_json(
+                raw_response,
+            )
+
+            assert response.type == "error"
+
+            assert (
+                response.payload["message"]
+                == "Binary messages are not supported"
+            )
+
+            await client.close()
+
+        finally:
+            server_task.cancel()
+
+            with suppress(asyncio.CancelledError):
+                await server_task
+
+    asyncio.run(scenario())
+def test_websocket_connection_survives_invalid_message() -> None:
+    """
+    验证客户端发送非法消息后，
+    同一个 WebSocket 连接仍然可以继续处理正常消息。
+    """
+
+    async def scenario() -> None:
+        port = _get_free_port()
+
+        server = WebSocketServer(
+            host="127.0.0.1",
+            port=port,
+            agent=Agent(),
+        )
+
+        server_task = asyncio.create_task(
+            server.run(),
+        )
+
+        try:
+            client = await _connect_with_retry(
+                f"ws://127.0.0.1:{port}"
+            )
+
+            # 先发送非法 JSON。
+            await client.send(
+                "invalid-json",
+            )
+
+            raw_error = await client.recv()
+
+            assert isinstance(
+                raw_error,
+                str,
+            )
+
+            error_response = Message.from_json(
+                raw_error,
+            )
+
+            assert error_response.type == "error"
+
+            # 再通过同一个连接发送合法消息。
+            message = Message(
+                type="chat",
+                source="desktop",
+                payload={
+                    "message": "连接还活着吗",
+                },
+            )
+
+            await client.send(
+                message.to_json(),
+            )
+
+            raw_response = await client.recv()
+
+            assert isinstance(
+                raw_response,
+                str,
+            )
+
+            response = Message.from_json(
+                raw_response,
+            )
+
+            assert response.type == "response"
+
+            assert (
+                response.payload["message"]
+                == "收到你的消息: 连接还活着吗"
+            )
+
+            await client.close()
 
         finally:
             server_task.cancel()
