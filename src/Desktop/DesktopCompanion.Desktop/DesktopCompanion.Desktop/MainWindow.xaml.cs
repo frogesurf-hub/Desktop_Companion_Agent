@@ -1,24 +1,71 @@
-﻿using System.Text;
 using System.Windows;
-using System.Windows.Controls;
-using System.Windows.Data;
-using System.Windows.Documents;
-using System.Windows.Input;
-using System.Windows.Media;
-using System.Windows.Media.Imaging;
-using System.Windows.Navigation;
-using System.Windows.Shapes;
 
-namespace DesktopCompanion.Desktop
+using DesktopCompanion.Desktop.Presentation;
+
+namespace DesktopCompanion.Desktop;
+
+public partial class MainWindow : Window
 {
-    /// <summary>
-    /// Interaction logic for MainWindow.xaml
-    /// </summary>
-    public partial class MainWindow : Window
+    private readonly MainWindowViewModel _viewModel;
+
+    public MainWindow(
+        MainWindowViewModel viewModel)
     {
-        public MainWindow()
+        InitializeComponent();
+
+        _viewModel = viewModel;
+
+        DataContext = viewModel;
+    }
+
+    private async void ConnectButton_Click(
+        object sender,
+        RoutedEventArgs e)
+    {
+        try
         {
-            InitializeComponent();
+            await _viewModel.ConnectAsync();
+        }
+        catch (Exception exception)
+        {
+            MessageBox.Show(
+                exception.Message,
+                "Connection Error",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
+        }
+    }
+
+    private async void SendButton_Click(
+        object sender,
+        RoutedEventArgs e)
+    {
+        try
+        {
+            await _viewModel.SendChatAsync();
+        }
+        catch (Exception exception)
+        {
+            MessageBox.Show(
+                exception.Message,
+                "Send Error",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
+        }
+    }
+
+    protected override async void OnClosed(
+        EventArgs e)
+    {
+        base.OnClosed(e);
+
+        try
+        {
+            await _viewModel.DisconnectAsync();
+        }
+        catch
+        {
+            // Window is already closing.
         }
     }
 }
