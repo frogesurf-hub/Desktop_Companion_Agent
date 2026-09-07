@@ -31,5 +31,5 @@ pythonpath = [
 ]
 
 testpaths = [
-    "src/AgentCore/tests"
+    "src/agent_core/tests",
 ]
