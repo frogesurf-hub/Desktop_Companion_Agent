@@ -1,0 +1,6 @@
+python-dotenv
+pydantic
+requests
+websockets
+sqlalchemy
+pytest

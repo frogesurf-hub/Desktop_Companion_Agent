@@ -1,0 +1,18 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+
+# C#
+bin/
+obj/
+.vs/
+
+# Environment
+.env
+
+# Models
+models/
+
+# Logs
+logs/
