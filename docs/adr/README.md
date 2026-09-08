@@ -18,4 +18,8 @@ Phase 0 ADRs:
 - `0005-intent-is-not-permission.md`
 - `0006-real-and-fictional-state-separation.md`
 
+Phase 1 ADRs:
+
+- `0007-async-non-streaming-provider-contract-for-phase-1.md`
+
 ADRs describe why a decision exists. They do not replace implementation documentation or tests.
