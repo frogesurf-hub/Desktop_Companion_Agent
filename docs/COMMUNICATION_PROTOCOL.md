@@ -283,6 +283,43 @@ Example:
 }
 ```
 
+## 6.1 Phase 1 Provider Errors
+
+Phase 1 中，LLM Provider 失败通过统一 `error` Message 返回 Desktop。
+
+Provider 内部诊断信息、SDK 异常、API Key、Prompt、Reasoning Content 和原始响应体不能通过协议暴露。
+
+Provider error codes：
+
+| Code | Message | Meaning |
+| --- | --- | --- |
+| `PROVIDER_NOT_CONFIGURED` | `AI provider is not configured.` | Provider 配置缺失或无效 |
+| `PROVIDER_AUTHENTICATION_FAILED` | `AI provider authentication failed.` | Provider 身份验证失败 |
+| `PROVIDER_QUOTA_EXHAUSTED` | `AI provider quota or balance is insufficient.` | Provider 配额或余额不足 |
+| `PROVIDER_RATE_LIMITED` | `AI provider is rate-limited. Please try again later.` | Provider 限流 |
+| `PROVIDER_TIMEOUT` | `AI provider request timed out.` | Provider 请求超时 |
+| `PROVIDER_UNAVAILABLE` | `AI provider is temporarily unavailable.` | Provider 网络连接失败或服务暂时不可用 |
+| `PROVIDER_REQUEST_FAILED` | `AI provider rejected the request.` | Provider 拒绝请求 |
+| `PROVIDER_INVALID_RESPONSE` | `AI provider returned an invalid response.` | Provider 返回无法满足统一契约的响应 |
+| `PROVIDER_ERROR` | `AI provider request failed.` | 未进一步分类的 Provider 错误 |
+
+Example:
+
+``` json
+{
+    "type":"error",
+    "source":"Desktop Companion",
+    "payload":{
+        "code":"PROVIDER_TIMEOUT",
+        "message":"AI provider request timed out."
+    }
+}
+```
+
+当前 WPF Desktop 仍可只读取 `payload.message`。`payload.code` 为稳定的机器可读错误类别，供后续 UI 行为使用。
+
+Phase 0 已存在的非 Provider 错误将在各自协议维护任务中逐步统一，本节不改变其当前运行行为。
+
 ------------------------------------------------------------------------
 
 # 7. Version Control

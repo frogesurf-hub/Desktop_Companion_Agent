@@ -1,4 +1,5 @@
 from agent_core.providers import (
+    LLMProviderError,
     LLMRequest,
     LLMResponse,
 )
@@ -31,3 +32,32 @@ class FakeLLMProvider:
         )
 
         return self._response
+
+
+class FailingLLMProvider:
+    """
+    测试专用的确定性失败 Provider。
+
+    用于验证 Agent 和协议错误边界。
+    """
+
+    def __init__(
+        self,
+        error: LLMProviderError,
+    ) -> None:
+        self._error = error
+        self.requests: list[LLMRequest] = []
+
+    async def generate(
+        self,
+        request: LLMRequest,
+    ) -> LLMResponse:
+        """
+        记录请求并抛出预设 Provider error。
+        """
+
+        self.requests.append(
+            request,
+        )
+
+        raise self._error

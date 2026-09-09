@@ -1,13 +1,28 @@
 import asyncio
 
+import pytest
+
 from agent_core.core.agent import Agent
 from agent_core.core.message import Message
 from agent_core.providers import (
     LLMMessage,
+    LLMProviderError,
     LLMRequest,
     LLMResponse,
+    ProviderAuthenticationError,
+    ProviderConfigurationError,
+    ProviderConnectionError,
+    ProviderQuotaError,
+    ProviderRateLimitError,
+    ProviderRequestError,
+    ProviderResponseError,
+    ProviderTimeoutError,
+    ProviderUnavailableError,
 )
-from agent_core.tests.fakes import FakeLLMProvider
+from agent_core.tests.fakes import (
+    FailingLLMProvider,
+    FakeLLMProvider,
+)
 
 
 def test_message_create() -> None:
@@ -43,7 +58,9 @@ def test_message_json() -> None:
 
     json_data = message.to_json()
 
-    restored = Message.from_json(json_data)
+    restored = Message.from_json(
+        json_data,
+    )
 
     assert restored.type == "chat"
     assert restored.payload["message"] == "hello"
@@ -80,7 +97,11 @@ def test_agent_uses_provider_for_chat_message() -> None:
     )
 
     assert response.type == "response"
-    assert response.payload["message"] == "来自 Provider 的回复"
+
+    assert (
+        response.payload["message"]
+        == "来自 Provider 的回复"
+    )
 
     assert provider.requests == [
         LLMRequest(
@@ -92,6 +113,114 @@ def test_agent_uses_provider_for_chat_message() -> None:
             ),
         ),
     ]
+
+
+@pytest.mark.parametrize(
+    (
+        "error_type",
+        "expected_code",
+        "expected_message",
+    ),
+    [
+        (
+            ProviderConfigurationError,
+            "PROVIDER_NOT_CONFIGURED",
+            "AI provider is not configured.",
+        ),
+        (
+            ProviderAuthenticationError,
+            "PROVIDER_AUTHENTICATION_FAILED",
+            "AI provider authentication failed.",
+        ),
+        (
+            ProviderQuotaError,
+            "PROVIDER_QUOTA_EXHAUSTED",
+            "AI provider quota or balance is insufficient.",
+        ),
+        (
+            ProviderRateLimitError,
+            "PROVIDER_RATE_LIMITED",
+            "AI provider is rate-limited. Please try again later.",
+        ),
+        (
+            ProviderTimeoutError,
+            "PROVIDER_TIMEOUT",
+            "AI provider request timed out.",
+        ),
+        (
+            ProviderConnectionError,
+            "PROVIDER_UNAVAILABLE",
+            "AI provider is temporarily unavailable.",
+        ),
+        (
+            ProviderUnavailableError,
+            "PROVIDER_UNAVAILABLE",
+            "AI provider is temporarily unavailable.",
+        ),
+        (
+            ProviderRequestError,
+            "PROVIDER_REQUEST_FAILED",
+            "AI provider rejected the request.",
+        ),
+        (
+            ProviderResponseError,
+            "PROVIDER_INVALID_RESPONSE",
+            "AI provider returned an invalid response.",
+        ),
+        (
+            LLMProviderError,
+            "PROVIDER_ERROR",
+            "AI provider request failed.",
+        ),
+    ],
+)
+def test_agent_maps_provider_error_to_safe_protocol_error(
+    error_type: type[LLMProviderError],
+    expected_code: str,
+    expected_message: str,
+) -> None:
+    """
+    验证 Provider 错误会转换成稳定且安全的协议错误。
+    """
+
+    internal_diagnostic = (
+        "internal provider diagnostic that must not reach desktop"
+    )
+
+    provider = FailingLLMProvider(
+        error=error_type(
+            internal_diagnostic,
+        ),
+    )
+
+    agent = Agent(
+        provider=provider,
+    )
+
+    message = Message(
+        type="chat",
+        source="desktop",
+        payload={
+            "message": "你好",
+        },
+    )
+
+    response = asyncio.run(
+        agent.process_message(
+            message,
+        )
+    )
+
+    assert response.type == "error"
+
+    assert response.payload == {
+        "code": expected_code,
+        "message": expected_message,
+    }
+
+    assert internal_diagnostic not in response.to_json()
+
+    assert len(provider.requests) == 1
 
 
 def test_agent_rejects_unsupported_message_without_calling_provider() -> None:
@@ -123,5 +252,10 @@ def test_agent_rejects_unsupported_message_without_calling_provider() -> None:
     )
 
     assert response.type == "error"
-    assert response.payload["message"] == "Unsupported message type"
+
+    assert (
+        response.payload["message"]
+        == "Unsupported message type"
+    )
+
     assert provider.requests == []
