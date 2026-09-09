@@ -24,3 +24,8 @@ Phase 1 ADRs:
 
 - `0008-deepseek-v4-flash-via-async-openai-chat-completions.md`
 - `0009-provider-error-isolation-and-desktop-error-mapping.md`
+
+Phase 2 ADRs:
+
+- `0010-events-are-facts-commands-remain-explicit-boundaries.md`
+- `0011-async-bounded-in-process-event-bus.md`
