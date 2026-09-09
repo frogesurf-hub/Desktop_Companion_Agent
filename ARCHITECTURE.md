@@ -261,9 +261,9 @@
 
 ------------------------------------------------------------------------
 
-# 15. Phase 0 Implemented Baseline
+# 15. Phase 1 Implemented Baseline
 
-The sections above describe the long-term target architecture. As of the Phase 0 checkpoint (2026-09-08), the implemented vertical slice is intentionally smaller.
+The sections above describe the long-term target architecture. As of the Phase 1 checkpoint (2026-09-09), the implemented runtime now includes the original real-LLM MVP.
 
 ## 15.1 Current Desktop Runtime
 
@@ -287,7 +287,7 @@ Responsibilities:
 - `WebSocketAgentConnection`: WebSocket + JSON transport implementation
 - `AgentMessage`: C# representation of the protocol envelope
 
-The independent receive loop is an intentional architectural requirement for future proactive messages.
+The independent receive loop remains an intentional architectural requirement for future proactive messages.
 
 ## 15.2 Current Python Runtime
 
@@ -295,21 +295,79 @@ The independent receive loop is an intentional architectural requirement for fut
 main.py
   -> Settings
   -> Logging
+  -> DeepSeekProvider
   -> Agent
   -> WebSocketServer
   -> Message
 ```
 
+More precisely:
+
+```text
+main.py
+  -> get_settings()
+  -> validate provider selection
+  -> unwrap SecretStr at the composition root
+  -> create DeepSeekProvider
+  -> create Agent(provider)
+  -> create WebSocketServer(agent)
+  -> await server.run()
+  -> finally await provider.aclose()
+```
+
 Responsibilities:
 
-- `main.py`: Python composition root and async runtime entry
+- `main.py`: Python composition root, provider construction, async runtime entry, provider lifetime
 - `Settings`: environment / `.env` runtime configuration
 - `Logging`: console + rotating-file observability
 - `WebSocketServer`: connection lifecycle, protocol parsing, error isolation, response transport
 - `Message`: Python protocol envelope
-- `Agent`: current processing boundary; Phase 0 implementation is an echo stub
+- `Agent`: protocol-to-provider orchestration and safe Provider error mapping
+- `LLMProvider`: provider-neutral asynchronous Agent-facing contract
+- `DeepSeekProvider`: concrete DeepSeek / OpenAI-compatible adapter
 
-## 15.3 Current Cross-Process Flow
+## 15.3 Provider Layer
+
+```text
+Agent
+  |
+  v
+LLMProvider Protocol
+  |
+  +-- LLMRequest / LLMResponse
+  +-- LLMProviderError hierarchy
+  |
+  v
+DeepSeekProvider
+  |
+  v
+AsyncOpenAI
+  |
+  v
+DeepSeek API
+```
+
+Boundary rules:
+
+- Agent Core must not import DeepSeek/OpenAI SDK types.
+- vendor exceptions are translated inside the adapter.
+- Provider failures cross into Agent as provider-neutral errors.
+- Desktop receives stable safe error codes/messages.
+- API keys are unwrapped only at provider construction.
+- external async client lifetime is owned by the composition root.
+
+Phase 1 Provider behavior:
+
+```text
+async
+non-streaming
+thinking disabled by default
+60-second default application timeout
+zero automatic retries
+asyncio cancellation propagation
+```
+
+## 15.4 Current Cross-Process Flow
 
 ```text
 WPF UI
@@ -319,21 +377,41 @@ WPF UI
   -> WebSocketServer
   -> Message.from_json()
   -> Agent.process_message()
+  -> LLMRequest
+  -> LLMProvider.generate()
+  -> DeepSeekProvider
+  -> DeepSeek API
+  -> LLMResponse
+  -> protocol Message
   -> Message.to_json()
   -> WebSocketAgentConnection
   -> MainWindowViewModel
   -> WPF UI
 ```
 
-Phase 0 verified this flow using both:
+Phase 1 verified this flow using both:
 
 - `tools/DesktopCompanion.ConnectionProbe`
 - the real WPF UI
 
-## 15.4 Not Implemented Yet
+## 15.5 Provider Failure Flow
+
+```text
+DeepSeek / SDK failure
+  -> DeepSeekProvider translation
+  -> LLMProviderError
+  -> Agent safe mapping
+  -> protocol error code + message
+  -> WPF
+```
+
+The Provider boundary prevents raw vendor diagnostics from becoming the Desktop contract.
+
+## 15.6 Still Not Implemented
 
 The following target-architecture modules remain design-level only:
 
+- Event Bus / Event System
 - Character Core
 - Memory System
 - Internal State
@@ -344,20 +422,20 @@ The following target-architecture modules remain design-level only:
 - Permission Layer
 - Action / Tool Layer
 - Embodiment Layer
-- Event Bus
-- LLM Provider implementations
-- Local-model routing
+- local-model routing / cloud fallback
+- voice
 
 Do not infer implementation merely because a module exists in the target diagram.
 
-## 15.5 Boundary Rule
+## 15.7 Boundary Rule
 
-Future implementation should extend the current vertical slice without collapsing layers.
+Future implementation should extend the verified Phase 1 vertical slice without collapsing layers.
 
 In particular:
 
 - UI must not own WebSocket / provider / memory logic
-- WebSocket must not own Agent construction
+- WebSocket must not own Agent or Provider construction
 - provider-specific code must not become the Agent Core API
+- Event System work should introduce explicit event boundaries before later proactive systems are added
 - proactive behavior must use an event/attention path rather than UI polling
 - sensitive actions must pass through Permission Layer

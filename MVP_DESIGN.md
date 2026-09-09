@@ -1,29 +1,19 @@
 # Desktop Companion Agent - MVP Design
 
-## 0. Phase 0 Checkpoint Note
+## 0. Phase 1 Completion Note
 
-The original MVP definition in this document includes a real LLM provider call.
+The original AI MVP defined in this document is now complete.
 
-Phase 0 completed the technical foundation and cross-language vertical slice, but intentionally stopped before DeepSeek integration.
+Phase 0 completed the engineering foundation and cross-language vertical slice.
 
-Current verified path:
-
-```text
-WPF Desktop
-  -> WebSocket
-  -> Python Agent Core
-  -> echo Agent stub
-  -> WebSocket
-  -> WPF Desktop
-```
-
-Original full MVP target remains:
+Phase 1 completed the real provider path:
 
 ```text
 WPF Desktop
   -> WebSocket
   -> Python Agent Core
   -> LLM Provider abstraction
+  -> DeepSeek Adapter
   -> DeepSeek API
   -> Python Agent Core
   -> WebSocket
@@ -32,11 +22,13 @@ WPF Desktop
 
 Therefore:
 
-- Phase 0: **complete**
-- Original AI MVP: **not yet complete**
-- Phase 1 should complete the provider / DeepSeek section without coupling the Agent to one vendor.
+- Phase 0 engineering foundation: **complete**
+- Phase 1 provider / DeepSeek integration: **complete**
+- Original AI MVP: **complete**
 
-See `PROJECT_STATE.md` and `docs/PHASE_0_CHECKPOINT.md` for the current repository state.
+Real Phase 1 acceptance included ConnectionProbe, WPF, deliberate authentication-failure mapping, log-safety review, and the final complete Python quality gate.
+
+See `PROJECT_STATE.md` and `docs/PHASE_1_CHECKPOINT.md` for the current repository state.
 
 ---
 
@@ -83,7 +75,7 @@ C# WPF
 - 与 Agent Core 建立长连接
 - 独立接收 Agent 主动消息
 
-Phase 0 status: implemented at foundation level.
+Phase 1 status: implemented and verified end-to-end.
 
 ### Agent Core
 
@@ -100,10 +92,12 @@ Python 3.11
 - 调用 LLM Provider
 - 返回统一协议消息
 
-Phase 0 status:
+Phase 1 status:
 
 - protocol/runtime path implemented
-- LLM provider not implemented
+- provider-neutral async LLM contract implemented
+- DeepSeek adapter implemented
+- real provider path verified end-to-end
 
 ### LLM Provider
 
@@ -207,7 +201,7 @@ DeepSeek Adapter
 DeepSeek API
 ```
 
-Phase 0 has implemented everything above through `Python Agent Core`, with a stub Agent response in place of the provider path.
+Phase 1 has implemented and verified the full architecture above through the real DeepSeek provider path.
 
 ---
 
@@ -263,9 +257,7 @@ The original MVP is complete when a user can:
 7. receive a real LLM response
 8. display the response in WPF
 
-Phase 0 already verifies steps 1-5 and 8 using the echo Agent.
-
-Phase 1 should complete steps 6-7 and re-run the full end-to-end acceptance manually.
+Phase 1 verified all steps 1-8 using the real provider path. The original AI MVP completion criterion is satisfied.
 
 ---
 
@@ -295,9 +287,9 @@ Character Intent != System Permission
 
 ## 8. After MVP
 
-After the original LLM MVP is completed, continue with the repository `ROADMAP.md` rather than the older phase numbering that previously appeared in this document.
+The original LLM MVP is complete. Continue with the repository `ROADMAP.md` for Phase 2 and later work.
 
-The roadmap is the authoritative phase sequence after the 2026-09-08 Phase 0 re-baseline.
+The roadmap is the authoritative phase sequence after the 2026-09-09 Phase 1 re-baseline.
 
 ---
 

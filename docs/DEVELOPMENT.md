@@ -61,13 +61,13 @@ This installs:
 - development dependencies from the `dev` extra (`pytest`, `ruff`, `mypy`)
 - the current project in editable mode
 
-`src/agent_core/requirements.txt` still exists at the Phase 0 checkpoint, but it duplicates dependency information and is a cleanup candidate. Do not add new dependencies to only one of the two files without deciding the canonical dependency policy.
+`pyproject.toml` is the canonical Python dependency source. `src/agent_core/requirements.txt` is legacy duplicate metadata and must not receive new dependency declarations. Retire or remove it only in a dedicated maintenance task.
 
 ---
 
 ## 2. Project Structure
 
-Phase 0 high-level structure:
+Phase 1 high-level structure:
 
 ```text
 Desktop_Companion_Agent
@@ -75,13 +75,17 @@ Desktop_Companion_Agent
 │   ├── adr
 │   ├── COMMUNICATION_PROTOCOL.md
 │   ├── DEVELOPMENT.md
-│   └── PHASE_0_CHECKPOINT.md
+│   ├── PHASE_0_CHECKPOINT.md
+│   ├── PHASE_1_CHECKPOINT.md
+│   ├── PHASE_1_PROVIDER_LAYER_DESIGN.md
+│   └── PHASE_1_DEEPSEEK_ADAPTER_DESIGN.md
 ├── src
 │   ├── agent_core
 │   │   ├── communication
 │   │   ├── config
 │   │   ├── core
 │   │   ├── observability
+│   │   ├── providers
 │   │   ├── tests
 │   │   └── main.py
 │   └── Desktop
@@ -113,7 +117,7 @@ Responsibilities:
 - `PROJECT_STATE.md`: primary context-recovery / current-state document.
 - root Markdown files: project-level architecture, design, roadmap, technology, and third-party policies.
 
-Known Phase 0 cleanup: the C# protocol source folder is physically named `Potocol/` even though the namespace is `DesktopCompanion.Desktop.Protocol`; rename the folder to `Protocol/` in a dedicated cleanup commit.
+Completed cleanup: the C# protocol source folder was renamed from `Potocol/` to `Protocol/` in commit `81d2747`.
 
 ---
 
@@ -599,16 +603,18 @@ A development task is complete when all relevant items are satisfied:
 
 ## 20. Current Development Baseline
 
-Phase 0 baseline (2026-09-08):
+Phase 1 baseline (2026-09-09):
 
 - Windows 11 primary environment
 - C# WPF desktop layer
 - .NET 8 Windows project target
 - Python 3.11 Agent Core
-- `pyproject.toml` as the Python project/build configuration
+- `pyproject.toml` as the canonical Python project/build/dependency configuration
+- editable install through `pip install -e ".[dev]"`
 - pytest discovery under `src/agent_core/tests`
 - Ruff and mypy integrated into normal development checks
 - `pydantic-settings` runtime configuration with `.env` support
+- `SecretStr` used for Provider secrets
 - console + rotating-file Python logging
 - local WebSocket implemented for Desktop <-> Agent Core communication
 - JSON message envelope implemented in both Python and C#
@@ -617,21 +623,46 @@ Phase 0 baseline (2026-09-08):
 - C# independent receive loop implemented for future proactive messages
 - ConnectionProbe available for transport diagnostics
 - WPF ViewModel + Application Service layering implemented
-- real WPF <-> Python echo-Agent round trip verified
+- provider-neutral asynchronous `LLMProvider` contract implemented
+- immutable Provider request / response models implemented
+- provider-neutral error hierarchy implemented
+- real DeepSeek provider adapter implemented through `openai.AsyncOpenAI`
+- default model `deepseek-v4-flash`
+- non-streaming Phase 1 provider path
+- explicit 60-second default application timeout
+- SDK automatic retries disabled
+- safe Provider Error -> Desktop protocol mapping implemented
+- DeepSeek Provider lifetime owned by the composition root
+- real ConnectionProbe <-> Python <-> DeepSeek round trip verified
+- real WPF <-> Python <-> DeepSeek round trip verified
+- deliberate real authentication failure mapped safely
+- logs manually reviewed for sensitive Provider-data leakage
+- final Python acceptance: 66 pytest tests passed, Ruff passed, mypy passed on 28 source files
 - SQLite remains planned as the first persistent database
-- DeepSeek remains planned as the first cloud LLM provider
-- provider abstraction is required before DeepSeek integration
 - local-model support remains planned
 - Git is the source of development history
 
 Important distinction:
 
 - Phase 0 cross-language runtime foundation is complete.
-- The original AI MVP is not complete until a real LLM provider path is connected.
+- Phase 1 original AI MVP / real LLM path is complete.
+- Phase 2 Event System is the next roadmap phase.
+
+Current Provider constraints:
+
+- Phase 1 is non-streaming.
+- Phase 1 performs zero automatic retries.
+- no local-model/cloud fallback routing exists yet.
+- Provider roles are currently limited to `system`, `user`, and `assistant`.
+- prompt/persona composition, Memory, Tools, Perception, Situation, Attention, Behavior, Avatar, and Voice remain future work.
 
 Context-recovery documents:
 
 - `PROJECT_STATE.md`
+- `docs/PHASE_1_CHECKPOINT.md`
+
+Historical checkpoint:
+
 - `docs/PHASE_0_CHECKPOINT.md`
 
 This document should continue evolving with each major runtime phase.

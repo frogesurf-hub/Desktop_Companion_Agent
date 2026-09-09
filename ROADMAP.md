@@ -1,8 +1,8 @@
 # Desktop Companion Agent Roadmap
 
-> Re-baselined after the Phase 0 checkpoint on 2026-09-08.
+> Re-baselined after the Phase 1 checkpoint on 2026-09-09.
 >
-> The original roadmap placed Desktop basics in Phase 1 and LLM integration later. During implementation, the Desktop/WebSocket vertical slice was intentionally pulled into Phase 0. The roadmap below reflects the actual repository state while preserving the long-term architecture direction.
+> Phase 0 established the Desktop/WebSocket cross-language foundation. Phase 1 completed the original AI MVP with a provider-neutral DeepSeek path. Phase 2 is now the active next phase.
 
 ## Phase 0 - Engineering Foundation and Cross-Language Vertical Slice
 
@@ -39,35 +39,56 @@ See:
 
 ## Phase 1 - LLM Provider and Original MVP Completion
 
-Status: **Next**
+Status: **Complete**
 
-Goal:
+Completed:
 
-Replace the echo Agent path with a provider-agnostic LLM path while keeping vendor-specific code outside the Agent Core.
+- [x] provider-neutral async `LLMProvider` contract
+- [x] immutable Provider request / response models
+- [x] deterministic fake Provider test infrastructure
+- [x] provider-neutral error hierarchy
+- [x] DeepSeek adapter through `AsyncOpenAI`
+- [x] configurable DeepSeek model / timeout / thinking settings
+- [x] explicit non-streaming Phase 1 path
+- [x] explicit timeout and cancellation semantics
+- [x] SDK automatic retries disabled
+- [x] Provider failure -> safe Desktop protocol error mapping
+- [x] composition-root Provider construction / cleanup
+- [x] secure API-key use through `SecretStr` and local `.env`
+- [x] real ConnectionProbe -> Python -> DeepSeek -> ConnectionProbe acceptance
+- [x] real WPF -> Python -> DeepSeek -> WPF acceptance
+- [x] deliberate real authentication-failure acceptance
+- [x] final full Python quality gate
 
-Planned:
+Final Python acceptance:
 
-- Provider interface / contract
-- DeepSeek provider adapter
-- provider request / response boundary
-- secure API-key loading through existing Settings
-- timeout and cancellation handling
-- provider failure -> protocol error behavior
-- logging without leaking prompts/secrets unintentionally
-- fake/mock provider tests
-- real WPF -> Python -> DeepSeek -> WPF acceptance
+```text
+66 pytest tests passed
+Ruff passed
+mypy passed on 28 source files
+```
 
-Not included by default:
+See:
+
+- `PROJECT_STATE.md`
+- `docs/PHASE_1_CHECKPOINT.md`
+
+Not included:
 
 - Memory
 - Perception
 - Avatar
 - Tools
 - autonomous actions
+- streaming
+- automatic provider retry
+- local-model fallback
 
 ---
 
 ## Phase 2 - Event System
+
+Status: **Next**
 
 Goal:
 

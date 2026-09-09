@@ -167,26 +167,49 @@ Python 拥有成熟 AI 生态：
 
 # 6. LLM Provider
 
-采用抽象接口：
+采用 provider-neutral 抽象接口：
 
-    LLM Provider
+    LLMProvider
 
 不绑定单一模型。
 
-架构：
+Phase 1 已实现：
 
     Agent Core
 
     ↓
 
-    LLM Interface
+    LLMProvider Protocol
+
+    ↓
+
+    DeepSeekProvider
+
+    ↓
+
+    openai.AsyncOpenAI
 
     ↓
 
     DeepSeek API
-    OpenAI API
-    Claude API
-    Gemini API
+
+当前 Provider 契约：
+
+    async generate(LLMRequest) -> LLMResponse
+
+当前 Phase 1 行为：
+
+-   非流式
+-   默认 60 秒超时
+-   SDK 自动重试关闭
+-   asyncio cancellation 向上传播
+-   Provider 错误使用统一 vendor-neutral error hierarchy
+
+Future providers may include:
+
+    OpenAI-compatible providers
+    Claude
+    Gemini
     Local Model
 
 ------------------------------------------------------------------------
@@ -195,9 +218,28 @@ Python 拥有成熟 AI 生态：
 
 ## Primary Provider
 
-选择：
+Phase 1 实际实现：
 
     DeepSeek API
+
+默认模型：
+
+    deepseek-v4-flash
+
+Python client：
+
+    openai.AsyncOpenAI
+
+OpenAI-compatible base URL：
+
+    https://api.deepseek.com
+
+默认：
+
+    thinking = false
+    stream = false
+    timeout = 60s
+    automatic retry = 0
 
 原因：
 
