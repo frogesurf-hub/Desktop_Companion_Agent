@@ -2,12 +2,40 @@ import asyncio
 import logging
 
 from agent_core.communication import WebSocketServer
-from agent_core.config import get_settings
+from agent_core.config import Settings, get_settings
 from agent_core.core.agent import Agent
 from agent_core.observability import setup_logging
-from agent_core.providers.echo import EchoLLMProvider
+from agent_core.providers import ProviderConfigurationError
+from agent_core.providers.deepseek import DeepSeekProvider
 
 logger = logging.getLogger(__name__)
+
+
+def _create_provider(
+    settings: Settings,
+) -> DeepSeekProvider:
+    """
+    根据当前配置创建 Phase 1 支持的具体 LLM Provider。
+
+    SecretStr 只允许在这个 Composition Root 边界解包。
+    """
+
+    if settings.model_provider != "deepseek":
+        raise ProviderConfigurationError(
+            "Unsupported model provider configuration",
+        )
+
+    if settings.deepseek_api_key is None:
+        raise ProviderConfigurationError(
+            "DeepSeek API key is missing",
+        )
+
+    return DeepSeekProvider(
+        api_key=settings.deepseek_api_key.get_secret_value(),
+        model=settings.deepseek_model,
+        timeout_seconds=settings.deepseek_timeout_seconds,
+        thinking_enabled=settings.deepseek_thinking_enabled,
+    )
 
 
 async def run() -> None:
@@ -41,9 +69,9 @@ async def run() -> None:
         settings.model_provider,
     )
 
-    logger.warning(
-        "Real LLM provider adapter is not wired yet; "
-        "using the Phase 0 echo compatibility provider",
+    logger.info(
+        "Configured DeepSeek model: %s",
+        settings.deepseek_model,
     )
 
     logger.info(
@@ -52,19 +80,25 @@ async def run() -> None:
         settings.websocket_port,
     )
 
-    provider = EchoLLMProvider()
-
-    agent = Agent(
-        provider=provider,
+    provider = _create_provider(
+        settings,
     )
 
-    server = WebSocketServer(
-        host=settings.websocket_host,
-        port=settings.websocket_port,
-        agent=agent,
-    )
+    try:
+        agent = Agent(
+            provider=provider,
+        )
 
-    await server.run()
+        server = WebSocketServer(
+            host=settings.websocket_host,
+            port=settings.websocket_port,
+            agent=agent,
+        )
+
+        await server.run()
+
+    finally:
+        await provider.aclose()
 
 
 def main() -> None:
