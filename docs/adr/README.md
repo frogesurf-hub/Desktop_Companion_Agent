@@ -22,4 +22,5 @@ Phase 1 ADRs:
 
 - `0007-async-non-streaming-provider-contract-for-phase-1.md`
 
-ADRs describe why a decision exists. They do not replace implementation documentation or tests.
+- `0008-deepseek-v4-flash-via-async-openai-chat-completions.md`
+- `0009-provider-error-isolation-and-desktop-error-mapping.md`
