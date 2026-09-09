@@ -19,6 +19,7 @@ dependencies = [
     "requests",
     "websockets",
     "sqlalchemy",
+    "openai>=3.10.0,<4",
 ]
 
 

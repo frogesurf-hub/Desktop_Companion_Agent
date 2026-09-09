@@ -1,7 +1,7 @@
 from functools import lru_cache
 from typing import Literal
 
-from pydantic import SecretStr
+from pydantic import Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -47,6 +47,15 @@ class Settings(BaseSettings):
     model_provider: str = "deepseek"
 
     deepseek_api_key: SecretStr | None = None
+
+    deepseek_model: str = "deepseek-v4-flash"
+
+    deepseek_timeout_seconds: float = Field(
+        default=60.0,
+        gt=0,
+    )
+
+    deepseek_thinking_enabled: bool = False
 
     log_level: Literal[
         "DEBUG",
