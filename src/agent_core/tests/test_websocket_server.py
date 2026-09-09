@@ -9,6 +9,8 @@ from websockets.asyncio.client import ClientConnection, connect
 from agent_core.communication import WebSocketServer
 from agent_core.core.agent import Agent
 from agent_core.core.message import Message
+from agent_core.providers import LLMResponse
+from agent_core.tests.fakes import FakeLLMProvider
 
 
 def _get_free_port() -> int:
@@ -26,6 +28,24 @@ def _get_free_port() -> int:
     assert isinstance(port, int)
 
     return port
+
+
+def _create_agent(
+    response_text: str = "fake response",
+) -> Agent:
+    """
+    创建注入确定性 Fake Provider 的测试 Agent。
+    """
+
+    provider = FakeLLMProvider(
+        response=LLMResponse(
+            content=response_text,
+        ),
+    )
+
+    return Agent(
+        provider=provider,
+    )
 
 
 async def _connect_with_retry(
@@ -75,7 +95,7 @@ def test_websocket_server_connection_lifecycle(
         server = WebSocketServer(
             host="127.0.0.1",
             port=port,
-            agent=Agent(),
+            agent=_create_agent(),
         )
 
         server_task = asyncio.create_task(
@@ -122,7 +142,7 @@ def test_websocket_server_connection_lifecycle(
 def test_websocket_server_message_round_trip() -> None:
     """
     验证客户端发送 chat Message 后，
-    WebSocket Server 会调用 Agent 并返回 response Message。
+    WebSocket Server 会等待 Agent 并返回 Provider 响应。
     """
 
     async def scenario() -> None:
@@ -131,7 +151,9 @@ def test_websocket_server_message_round_trip() -> None:
         server = WebSocketServer(
             host="127.0.0.1",
             port=port,
-            agent=Agent(),
+            agent=_create_agent(
+                response_text="来自 Provider 的 WebSocket 回复",
+            ),
         )
 
         server_task = asyncio.create_task(
@@ -170,7 +192,7 @@ def test_websocket_server_message_round_trip() -> None:
 
             assert (
                 response.payload["message"]
-                == "收到你的消息: 你好"
+                == "来自 Provider 的 WebSocket 回复"
             )
 
             await client.close()
@@ -182,6 +204,7 @@ def test_websocket_server_message_round_trip() -> None:
                 await server_task
 
     asyncio.run(scenario())
+
 
 def test_websocket_server_rejects_invalid_json() -> None:
     """
@@ -195,7 +218,7 @@ def test_websocket_server_rejects_invalid_json() -> None:
         server = WebSocketServer(
             host="127.0.0.1",
             port=port,
-            agent=Agent(),
+            agent=_create_agent(),
         )
 
         server_task = asyncio.create_task(
@@ -239,6 +262,7 @@ def test_websocket_server_rejects_invalid_json() -> None:
 
     asyncio.run(scenario())
 
+
 def test_websocket_server_rejects_invalid_message_structure() -> None:
     """
     验证缺少协议字段的 JSON 会返回 error Message。
@@ -250,7 +274,7 @@ def test_websocket_server_rejects_invalid_message_structure() -> None:
         server = WebSocketServer(
             host="127.0.0.1",
             port=port,
-            agent=Agent(),
+            agent=_create_agent(),
         )
 
         server_task = asyncio.create_task(
@@ -294,6 +318,7 @@ def test_websocket_server_rejects_invalid_message_structure() -> None:
 
     asyncio.run(scenario())
 
+
 def test_websocket_server_rejects_binary_message() -> None:
     """
     验证 Binary WebSocket 消息会返回协议错误。
@@ -305,7 +330,7 @@ def test_websocket_server_rejects_binary_message() -> None:
         server = WebSocketServer(
             host="127.0.0.1",
             port=port,
-            agent=Agent(),
+            agent=_create_agent(),
         )
 
         server_task = asyncio.create_task(
@@ -348,6 +373,8 @@ def test_websocket_server_rejects_binary_message() -> None:
                 await server_task
 
     asyncio.run(scenario())
+
+
 def test_websocket_connection_survives_invalid_message() -> None:
     """
     验证客户端发送非法消息后，
@@ -360,7 +387,9 @@ def test_websocket_connection_survives_invalid_message() -> None:
         server = WebSocketServer(
             host="127.0.0.1",
             port=port,
-            agent=Agent(),
+            agent=_create_agent(
+                response_text="连接仍然可用",
+            ),
         )
 
         server_task = asyncio.create_task(
@@ -416,10 +445,7 @@ def test_websocket_connection_survives_invalid_message() -> None:
 
             assert response.type == "response"
 
-            assert (
-                response.payload["message"]
-                == "收到你的消息: 连接还活着吗"
-            )
+            assert response.payload["message"] == "连接仍然可用"
 
             await client.close()
 

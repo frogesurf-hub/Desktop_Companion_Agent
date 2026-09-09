@@ -11,9 +11,10 @@ def test_run_initializes_runtime(
 
     1. 读取 Settings
     2. 初始化 Logging
-    3. 创建 Agent
-    4. 创建 WebSocketServer
-    5. 启动 WebSocketServer
+    3. 创建兼容 Provider
+    4. 将 Provider 注入 Agent
+    5. 创建 WebSocketServer
+    6. 启动 WebSocketServer
     """
 
     calls: list[tuple[str, object]] = []
@@ -27,8 +28,20 @@ def test_run_initializes_runtime(
         websocket_port = 9999
         log_level = "DEBUG"
 
+    class FakeEchoLLMProvider:
+        def __init__(self) -> None:
+            calls.append(
+                ("provider_init", None),
+            )
+
     class FakeAgent:
-        pass
+        def __init__(
+            self,
+            provider: FakeEchoLLMProvider,
+        ) -> None:
+            calls.append(
+                ("agent_init", provider),
+            )
 
     class FakeWebSocketServer:
         def __init__(
@@ -80,6 +93,12 @@ def test_run_initializes_runtime(
 
     monkeypatch.setattr(
         main_module,
+        "EchoLLMProvider",
+        FakeEchoLLMProvider,
+    )
+
+    monkeypatch.setattr(
+        main_module,
         "Agent",
         FakeAgent,
     )
@@ -104,9 +123,15 @@ def test_run_initializes_runtime(
         "DEBUG",
     )
 
-    assert calls[2][0] == "server_init"
+    assert calls[2] == (
+        "provider_init",
+        None,
+    )
 
-    assert calls[3] == (
+    assert calls[3][0] == "agent_init"
+    assert calls[4][0] == "server_init"
+
+    assert calls[5] == (
         "server_run",
         None,
     )

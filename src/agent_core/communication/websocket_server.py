@@ -47,7 +47,7 @@ class WebSocketServer:
 
         try:
             async for raw_message in websocket:
-                response = self._process_raw_message(
+                response = await self._process_raw_message(
                     raw_message,
                 )
 
@@ -61,7 +61,7 @@ class WebSocketServer:
                 websocket.remote_address,
             )
 
-    def _process_raw_message(
+    async def _process_raw_message(
         self,
         raw_message: str | bytes,
     ) -> Message:
@@ -116,7 +116,7 @@ class WebSocketServer:
                 },
             )
 
-        return self.agent.process_message(
+        return await self.agent.process_message(
             message,
         )
 

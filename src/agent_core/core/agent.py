@@ -1,38 +1,67 @@
 from agent_core.core.message import Message
+from agent_core.providers import (
+    LLMMessage,
+    LLMProvider,
+    LLMRequest,
+)
 
 
 class Agent:
     """
     Agent 核心逻辑。
 
-    当前版本：
-    接收消息并返回简单回复。
+    当前阶段负责：
+    - 接收协议 Message
+    - 转换为 Provider-neutral LLM 请求
+    - 调用注入的 LLM Provider
+    - 将 Provider 响应转换回协议 Message
 
-    后续会接入：
-    - LLM
+    后续会继续接入：
     - Memory
     - Behavior
     - Tool
     """
 
-    def __init__(self, name: str = "Desktop Companion") -> None:
+    def __init__(
+        self,
+        provider: LLMProvider,
+        name: str = "Desktop Companion",
+    ) -> None:
         self.name = name
+        self._provider = provider
 
-    def process_message(self, message: Message) -> Message:
+    async def process_message(
+        self,
+        message: Message,
+    ) -> Message:
         """
-        处理输入消息并返回统一 Message。
+        异步处理输入消息并返回统一 Message。
         """
 
         if message.type == "chat":
-            user_text = message.payload.get("message", "")
+            user_text = message.payload.get(
+                "message",
+                "",
+            )
 
-            response_text = f"收到你的消息: {user_text}"
+            request = LLMRequest(
+                messages=(
+                    LLMMessage(
+                        role="user",
+                        content=user_text,
+                    ),
+                ),
+            )
+
+            provider_response = await self._provider.generate(
+                request,
+            )
 
             return Message(
                 type="response",
                 source=self.name,
                 payload={
-                    "message": response_text,
+                    "message": provider_response.content,
                 },
             )
 

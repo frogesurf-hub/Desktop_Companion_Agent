@@ -1,5 +1,13 @@
+import asyncio
+
 from agent_core.core.agent import Agent
 from agent_core.core.message import Message
+from agent_core.providers import (
+    LLMMessage,
+    LLMRequest,
+    LLMResponse,
+)
+from agent_core.tests.fakes import FakeLLMProvider
 
 
 def test_message_create() -> None:
@@ -41,12 +49,21 @@ def test_message_json() -> None:
     assert restored.payload["message"] == "hello"
 
 
-def test_agent_response() -> None:
+def test_agent_uses_provider_for_chat_message() -> None:
     """
-    测试 Agent 处理消息。
+    验证 Agent 会把 chat Message 转换为 LLMRequest，
+    并将 Provider 响应转换回协议 response Message。
     """
 
-    agent = Agent()
+    provider = FakeLLMProvider(
+        response=LLMResponse(
+            content="来自 Provider 的回复",
+        ),
+    )
+
+    agent = Agent(
+        provider=provider,
+    )
 
     message = Message(
         type="chat",
@@ -56,7 +73,55 @@ def test_agent_response() -> None:
         },
     )
 
-    response = agent.process_message(message)
+    response = asyncio.run(
+        agent.process_message(
+            message,
+        )
+    )
 
     assert response.type == "response"
-    assert response.payload["message"] == "收到你的消息: 你好"
+    assert response.payload["message"] == "来自 Provider 的回复"
+
+    assert provider.requests == [
+        LLMRequest(
+            messages=(
+                LLMMessage(
+                    role="user",
+                    content="你好",
+                ),
+            ),
+        ),
+    ]
+
+
+def test_agent_rejects_unsupported_message_without_calling_provider() -> None:
+    """
+    验证非 chat Message 仍返回协议错误，
+    且不会调用 LLM Provider。
+    """
+
+    provider = FakeLLMProvider(
+        response=LLMResponse(
+            content="unused",
+        ),
+    )
+
+    agent = Agent(
+        provider=provider,
+    )
+
+    message = Message(
+        type="unsupported",
+        source="desktop",
+        payload={},
+    )
+
+    response = asyncio.run(
+        agent.process_message(
+            message,
+        )
+    )
+
+    assert response.type == "error"
+    assert response.payload["message"] == "Unsupported message type"
+    assert provider.requests == []

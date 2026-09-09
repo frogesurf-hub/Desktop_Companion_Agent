@@ -5,6 +5,7 @@ from agent_core.communication import WebSocketServer
 from agent_core.config import get_settings
 from agent_core.core.agent import Agent
 from agent_core.observability import setup_logging
+from agent_core.providers.echo import EchoLLMProvider
 
 logger = logging.getLogger(__name__)
 
@@ -36,8 +37,13 @@ async def run() -> None:
     )
 
     logger.info(
-        "Model provider: %s",
+        "Configured model provider: %s",
         settings.model_provider,
+    )
+
+    logger.warning(
+        "Real LLM provider adapter is not wired yet; "
+        "using the Phase 0 echo compatibility provider",
     )
 
     logger.info(
@@ -46,7 +52,11 @@ async def run() -> None:
         settings.websocket_port,
     )
 
-    agent = Agent()
+    provider = EchoLLMProvider()
+
+    agent = Agent(
+        provider=provider,
+    )
 
     server = WebSocketServer(
         host=settings.websocket_host,
