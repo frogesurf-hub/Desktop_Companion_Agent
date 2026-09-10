@@ -29,3 +29,4 @@ Phase 2 ADRs:
 
 - `0010-events-are-facts-commands-remain-explicit-boundaries.md`
 - `0011-async-bounded-in-process-event-bus.md`
+- `0012-fail-fast-event-bus-overload-admission.md`

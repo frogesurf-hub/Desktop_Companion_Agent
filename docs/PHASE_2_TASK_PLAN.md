@@ -1,10 +1,10 @@
 # Phase 2 - Event System Implementation Task Plan
 
-Status: **Accepted planning baseline - implementation not started**
+Status: **Accepted planning baseline - Task 1 complete; Task 2 architecture correction accepted, implementation revision pending**
 
-Date: 2026-09-09
+Date: 2026-09-10
 
-Repository baseline: `3e97efc Checkpoint Phase 1 completion`
+Current implementation baseline: `31734de Establish Phase 2 runtime event contracts`
 
 Architecture inputs:
 
@@ -12,6 +12,8 @@ Architecture inputs:
 - `docs/PHASE_2_ARCHITECTURE_REVIEW.md`
 - `docs/adr/0010-events-are-facts-commands-remain-explicit-boundaries.md`
 - `docs/adr/0011-async-bounded-in-process-event-bus.md`
+- `docs/adr/0012-fail-fast-event-bus-overload-admission.md`
+- `docs/PHASE_2_ARCHITECTURE_CORRECTION_001.md`
 
 ## 1. Implementation Rules
 
@@ -69,11 +71,15 @@ Create the stable event-side public data/contracts without queue or dispatcher i
 
 `Establish Phase 2 runtime event contracts`
 
-## 3. Task 2 - Event Bus Core Routing and Backpressure
+## 3. Task 2 - Event Bus Core Routing and Admission Control
 
 ### Goal
 
 Implement the accepted publication, subscription, queue, and exact-type routing core.
+
+### Architecture correction note
+
+The original blocking backpressure design was rejected during Task 2 working-code review because a subscriber can deadlock the single dispatcher by awaiting publication into an already-full queue. ADR 0012 now governs queue-full behavior.
 
 ### Scope
 
@@ -84,14 +90,17 @@ Implement the accepted publication, subscription, queue, and exact-type routing 
 - `start()` transition to `RUNNING`;
 - private dispatcher task;
 - `await publish(event)` queue-admission semantics;
-- bounded backpressure;
+- explicit `EventBusFullError` when the bounded queue has no immediate capacity;
 - queue-admission-order dispatch;
 - zero-subscriber Events complete normally;
-- lifecycle/state error for invalid public use.
+- lifecycle/state error for invalid public use;
+- `EventBusFullError` for explicit overload non-admission.
 
 ### Important concurrency requirement
 
-Shutdown/backpressure race must honor the accepted boundary: once `CLOSING` begins, a blocked publish that has not won queue admission must not enqueue afterward.
+Publication must not suspend while waiting for queue capacity. In the single-event-loop Phase 2 baseline, the `RUNNING` state check and non-blocking queue admission occur without an `await` between them. Queue-full publication fails explicitly with `EventBusFullError`.
+
+This avoids a circular wait when a subscriber publishes a derived Event while the queue is already full and the dispatcher is waiting for the current subscriber set to settle.
 
 ### Targeted verification
 
@@ -99,7 +108,8 @@ Shutdown/backpressure race must honor the accepted boundary: once `CLOSING` begi
 - unrelated type non-delivery;
 - static subscription state rules;
 - queue acceptance semantics;
-- bounded backpressure with synchronization primitives rather than fragile sleeps;
+- explicit queue-full rejection with `EventBusFullError`;
+- re-entrant subscriber publication does not deadlock when the queue is full;
 - admission-order dispatch;
 - invalid-state publication/registration behavior.
 
@@ -141,7 +151,8 @@ Make the Event Bus safe as a long-running async runtime service.
 - later Events continue after ordinary handler failure;
 - cancellation propagates correctly;
 - `close()` drains accepted queue;
-- blocked non-accepted publication does not cross shutdown boundary;
+- publication after `CLOSING` begins is rejected by lifecycle state;
+- queue-full publication is rejected immediately and never becomes accepted implicitly;
 - repeated close behavior;
 - close-from-NEW behavior;
 - cleanup leaves no live Event Bus tasks.
@@ -262,8 +273,8 @@ Formal Design                       ✅
 Architecture Review                 ✅
 ADR 0010 / ADR 0011                 ✅
 Final Task Breakdown                ✅
-Task 1 - Event Contract Foundation  <- next
-Task 2 - Event Bus Core             pending
+Task 1 - Event Contract Foundation  ✅ `31734de`
+Task 2 - Event Bus Core             <- architecture correction applied; implementation revision next
 Task 3 - Lifecycle / Failure        pending
 Task 4 - Observability              pending
 Task 5 - Runtime Integration        pending

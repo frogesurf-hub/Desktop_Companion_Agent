@@ -4,6 +4,8 @@ Status: Accepted
 
 Date: Phase 2 design baseline
 
+Amendment: **Queue-full waiting/backpressure semantics are superseded by ADR 0012. All other decisions in this ADR remain Accepted.**
+
 ## Context
 
 Phase 2 must provide a runtime Event System for a future long-running desktop Companion.
@@ -31,6 +33,8 @@ It does not mean subscribers have started, completed, or succeeded.
 Publishing is accepted only while the Event Bus is `RUNNING`.
 
 ### Queue and backpressure
+
+> **Historical note:** The original paragraph below specified waiting asynchronously for queue space. That queue-full behavior was found during Task 2 working-code review to permit a re-entrant publication deadlock. ADR 0012 supersedes only that queue-full waiting behavior.
 
 The Event Bus uses a bounded in-memory queue.
 
@@ -155,3 +159,14 @@ This decision builds on:
 - ADR 0010 - Runtime Events are facts; commands and requests remain explicit boundaries.
 
 The in-process Event Bus is separate from the WebSocket transport and does not supersede ADR 0002.
+
+
+## Amendment Relationship
+
+ADR 0012 supersedes only these ADR 0011 statements:
+
+- publishers wait asynchronously for queue space when the queue is full;
+- blocked publishers participate in a shutdown-vs-capacity race;
+- cancellation while waiting for queue capacity is part of normal overload handling.
+
+ADR 0012 replaces them with fail-fast bounded admission using `EventBusFullError`. Routing, ordering, subscriber execution, failure isolation, lifecycle, ownership, and persistence decisions in ADR 0011 remain Accepted.

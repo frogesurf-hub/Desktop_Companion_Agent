@@ -1,10 +1,12 @@
 # Phase 2 - Event System Design
 
-Status: **Architecture Reviewed - ADR 0010 / ADR 0011 Accepted; implementation not started**
+Status: **Architecture Reviewed - ADR 0010 / ADR 0011 / ADR 0012 Accepted; Task 1 complete; Task 2 architecture correction recorded**
 
-Date: 2026-09-09
+Date: 2026-09-10
 
-Repository baseline: `3e97efc Checkpoint Phase 1 completion`
+Original Phase 2 design baseline: `3e97efc Checkpoint Phase 1 completion`
+
+Current implementation baseline: `31734de Establish Phase 2 runtime event contracts`
 
 Snapshot source: `Desktop_Companion_Agent_phase1.zip`
 
@@ -86,7 +88,7 @@ A successful Phase 2 must define and verify:
 - subscriber boundaries
 - dispatch ordering and concurrency semantics
 - subscriber failure isolation
-- queue and backpressure semantics
+- bounded queue and overload-admission semantics
 - Event Bus lifecycle and cancellation behavior
 - event lifecycle observability
 - explicit separation between runtime events and Desktop protocol messages
@@ -105,7 +107,7 @@ Phase 2 includes:
 - typed event routing
 - subscriber contracts
 - bounded queueing
-- backpressure behavior
+- explicit overload rejection behavior
 - deterministic dispatch semantics
 - subscriber failure isolation
 - explicit Event Bus lifecycle
@@ -285,7 +287,7 @@ Purpose:
 Default Event creation generates a new UUID.
 
 The specific UUID generation version/implementation remains an implementation
-detail unless Task 1 requires it to become part of the public contract.
+detail unless a future requirement makes it part of the public contract.
 
 #### `occurred_at`
 
@@ -494,15 +496,15 @@ Examples may include:
 
 - publishing when the bus is not in an accepting state
 - invalid use of the Event Bus public contract
-- cancellation while waiting for queue capacity
+- explicit queue-capacity exhaustion behavior
 
 Subscriber exceptions are not raised back to the original publisher after acceptance.
 
-Architecture Review accepted a deliberately small Event System error surface. Task 1/Task 2 may introduce only the base/state errors justified by the accepted public lifecycle contract; speculative internal error classes are out of scope.
+Architecture Review accepted a deliberately small Event System error surface. The accepted public non-admission errors are `EventBusStateError` for lifecycle misuse and `EventBusFullError` for bounded-queue overload. Speculative internal error classes remain out of scope.
 
 ---
 
-## 11. Queue and Backpressure
+## 11. Queue Capacity and Overload Admission
 
 ### 11.1 Bounded In-Memory Queue
 
@@ -514,24 +516,46 @@ Reasons:
 - an unbounded queue can convert slow/failing consumers into uncontrolled memory growth
 - bounded capacity makes overload visible to producers
 
-### 11.2 Backpressure
+### 11.2 Overload Admission
 
-When the queue reaches capacity, `publish` waits asynchronously for space rather than silently dropping the Event.
+When the queue reaches capacity, publication fails explicitly with `EventBusFullError` rather than waiting indefinitely or silently dropping the Event.
 
 Conceptually:
 
 ```text
 producer
+   -> queue has capacity
+      -> Event admitted
+
+producer
    -> queue full
-   -> await capacity
-   -> event accepted
+      -> EventBusFullError
+      -> Event not accepted
 ```
 
-Phase 2 does not define business-specific event-dropping/coalescing behavior.
+Phase 2 does not define automatic retry, silent dropping, or business-specific event coalescing behavior.
 
-Dropping policies depend on event semantics. A future high-frequency Perception event might be coalescible while a future permission or lifecycle fact might not be. The base Event System must not guess those rules.
+Overload recovery depends on event semantics. A future high-frequency Perception event might be retryable or coalescible while a future permission or lifecycle fact may require a different response. The base Event System reports non-admission explicitly and must not guess those rules.
 
-### 11.3 Queue Capacity
+### 11.3 Re-entrant Publication Safety
+
+A subscriber may legitimately publish a derived Runtime Event in a future Phase. With a single dispatcher and the rule that the current Event settles before the next Event dispatch begins, waiting for queue capacity can create a circular wait:
+
+```text
+current Event handler
+    -> await publish(derived Event)
+    -> queue already full
+    -> waits for dispatcher to consume queue
+
+dispatcher
+    -> waits for current Event handler to finish
+```
+
+Phase 2 therefore uses fail-fast bounded admission. Re-entrant publication either succeeds immediately when queue capacity exists or receives `EventBusFullError`; it cannot wait on the same dispatcher whose progress depends on the current handler returning.
+
+This correction was discovered during Task 2 working-code review and is recorded in `docs/PHASE_2_ARCHITECTURE_CORRECTION_001.md` and ADR 0012.
+
+### 11.4 Queue Capacity
 
 The architectural requirement is bounded capacity.
 
@@ -685,7 +709,7 @@ CLOSED
 
 - dispatcher is active
 - subscriptions are active
-- publication is accepted subject to bounded backpressure
+- publication is accepted only when the bounded queue has immediate capacity
 
 ### 14.3 CLOSING
 
@@ -725,9 +749,9 @@ Architecture Review fixed the public lifecycle contract:
 - `publish()` is accepted only in `RUNNING`; it does not auto-start the bus.
 - `subscribe()` is accepted only in `NEW`; the subscription table is frozen after start.
 
-If shutdown begins while a publisher is blocked by backpressure, an Event that has not yet been admitted to the queue is not accepted after the transition to `CLOSING`. If queue admission wins the race, that Event is accepted and must be included in graceful drain.
+Phase 2 publication does not wait for queue capacity. While `RUNNING`, admission performs the state check and non-blocking bounded-queue insertion without a suspension point between them. Therefore shutdown cannot interleave between an accepted state check and queue admission in the single-event-loop baseline.
 
-Cancellation while waiting for queue capacity propagates as cancellation.
+If the bus is no longer `RUNNING`, publication fails with the lifecycle/state error. If the queue is full, publication fails with `EventBusFullError`. Only successfully admitted Events are part of graceful drain.
 
 ---
 
@@ -1037,9 +1061,9 @@ Verify:
 
 - publication accepts an Event while RUNNING
 - publication semantics mean queue acceptance rather than handler completion
-- bounded queue applies backpressure
+- full bounded queue rejects publication explicitly with `EventBusFullError`
 - no silent drop occurs
-- cancellation while blocked on backpressure behaves correctly
+- queue-full publication returns explicit non-admission rather than blocking
 
 ### 23.4 Dispatch Tests
 
@@ -1113,15 +1137,17 @@ No queue or dispatcher behavior yet.
 
 Purpose:
 
-- implement accepted publish/subscribe and exact-type routing semantics
+- implement accepted publish/subscribe, exact-type routing, and bounded admission semantics
 
 Expected scope:
 
 - bounded queue
 - async publish acceptance semantics
+- explicit `EventBusFullError` overload rejection
 - dispatcher
 - exact-type routing
-- targeted routing/backpressure tests
+- re-entrant publication deadlock regression test
+- targeted routing/admission-control tests
 
 ### Task 3 - Lifecycle and Failure Isolation
 
@@ -1251,7 +1277,7 @@ Confirm:
 - async in-process Event Bus
 - bounded queue
 - `await publish` = accepted into queue
-- wait/backpressure on full queue
+- explicit `EventBusFullError` on full queue
 - FIFO between Events
 - concurrent subscribers per Event
 - next Event waits for current Event subscribers to settle
@@ -1308,12 +1334,31 @@ Architecture Review determined that two long-lived decisions should be recorded 
 
 - `ADR 0010 - Runtime Events Are Facts; Commands and Requests Remain Explicit Boundaries`
 - `ADR 0011 - Async Bounded In-Process Event Bus for Phase 2`
+- `ADR 0012 - Fail-Fast Event Bus Overload Admission to Avoid Re-entrant Publication Deadlock`
 
-Both are Accepted before implementation begins. Separating the semantic communication rule from the dispatcher implementation keeps future architectural changes easier to reason about.
+ADR 0012 amends only ADR 0011's queue-full publication behavior. All other accepted ADR 0011 decisions remain in force. Keeping the correction separate preserves the architecture decision history instead of rewriting the original review outcome.
 
 ---
 
-## 28. Explicit Non-Decisions
+## 28. Post-Review Architecture Correction 001
+
+During Task 2 working-code review, the original wait-for-capacity backpressure rule was found to permit a re-entrant publication deadlock when a subscriber publishes a derived Event while the bounded queue is already full.
+
+The accepted correction is:
+
+```text
+queue has capacity -> admit Event
+queue full         -> raise EventBusFullError
+```
+
+The Event Bus still provides bounded memory and explicit overload feedback, but does not wait for queue capacity. Retry, coalescing, dropping, or escalation remain producer/domain decisions.
+
+This correction is recorded by:
+
+- `docs/PHASE_2_ARCHITECTURE_CORRECTION_001.md`;
+- ADR 0012, which supersedes only ADR 0011's queue-full waiting semantics.
+
+## 29. Explicit Non-Decisions
 
 This Phase 2 design does not decide:
 
@@ -1341,7 +1386,7 @@ These require demonstrated future requirements.
 
 ---
 
-## 29. Phase 2 Definition of Done
+## 30. Phase 2 Definition of Done
 
 Phase 2 should be considered complete only when:
 
@@ -1349,7 +1394,7 @@ Phase 2 should be considered complete only when:
 2. Required ADRs are Accepted.
 3. Runtime Event model is implemented and tested.
 4. Event Bus routing/publication contract is implemented and tested.
-5. bounded backpressure is implemented and tested.
+5. bounded queue overload rejection is implemented and tested.
 6. dispatch ordering/concurrency semantics are implemented and tested.
 7. subscriber failure isolation is implemented and tested.
 8. lifecycle/shutdown/cancellation semantics are implemented and tested.
@@ -1362,7 +1407,7 @@ Phase 2 should be considered complete only when:
 
 ---
 
-## 30. Current Development Breakpoint
+## 31. Current Development Breakpoint
 
 ```text
 Phase 2 - Event System
@@ -1370,12 +1415,13 @@ Phase 2 - Event System
 Context Recovery                 ✅
 Open design-point explanation    ✅
 Design document                  ✅
-Architecture Review              ✅
-ADR 0010 / ADR 0011              ✅
+Architecture Review              ✅ Passed
+ADR 0010 / ADR 0011 / ADR 0012   ✅ Accepted
 Final Task Breakdown             ✅
-Task 1 - Event Contract          <- next
-Implementation                   not started
-Targeted Verification            not started
+Task 1 - Event Contract          ✅ 31734de
+Task 2 - Event Bus Core          <- architecture correction applied; implementation revision next
+Implementation                   in progress
+Targeted Verification            pre-correction draft passed; must re-run after correction
 Phase Acceptance                 not started
 Checkpoint                       not started
 ```
