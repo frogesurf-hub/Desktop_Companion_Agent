@@ -1,4 +1,6 @@
 import asyncio
+import logging
+import time
 from collections import defaultdict
 from enum import Enum, auto
 from typing import TypeVar, cast
@@ -10,10 +12,54 @@ from agent_core.events.errors import (
 )
 from agent_core.events.models import RuntimeEvent
 
+logger = logging.getLogger(__name__)
+
 TEvent = TypeVar(
     "TEvent",
     bound=RuntimeEvent,
 )
+
+
+def _event_type_name(
+    event: RuntimeEvent,
+) -> str:
+    event_type = type(event)
+    return f"{event_type.__module__}.{event_type.__qualname__}"
+
+
+def _handler_identity(
+    handler: EventHandler[RuntimeEvent],
+) -> str:
+    module = getattr(
+        handler,
+        "__module__",
+        type(handler).__module__,
+    )
+    qualname = getattr(
+        handler,
+        "__qualname__",
+        type(handler).__qualname__,
+    )
+    return f"{module}.{qualname}"
+
+
+def _safe_log_source(
+    source: str,
+) -> str:
+    return source.replace(
+        "\r",
+        "\\r",
+    ).replace(
+        "\n",
+        "\\n",
+    )
+
+
+def _exception_type_name(
+    error: BaseException,
+) -> str:
+    error_type = type(error)
+    return f"{error_type.__module__}.{error_type.__qualname__}"
 
 
 class _EventBusState(Enum):
@@ -108,6 +154,11 @@ class EventBus:
             self._on_dispatcher_done,
         )
 
+        logger.info(
+            "event_bus_started queue_capacity=%d",
+            self._queue.maxsize,
+        )
+
     async def publish(
         self,
         event: RuntimeEvent,
@@ -135,6 +186,17 @@ class EventBus:
                 "EventBus queue is full"
             ) from None
 
+        logger.debug(
+            "event_lifecycle stage=accepted "
+            "event_type=%s event_id=%s source=%s "
+            "correlation_id=%s causation_id=%s",
+            _event_type_name(event),
+            event.event_id,
+            _safe_log_source(event.source),
+            event.correlation_id,
+            event.causation_id,
+        )
+
     async def close(self) -> None:
         """
         关闭 Event Bus。
@@ -160,6 +222,11 @@ class EventBus:
 
         self._state = _EventBusState.CLOSING
 
+        logger.info(
+            "event_bus_closing accepted_queue_size=%d",
+            self._queue.qsize(),
+        )
+
         try:
             await self._queue.join()
             await self._stop_dispatcher()
@@ -176,10 +243,41 @@ class EventBus:
 
         while True:
             event = await self._queue.get()
+            started_at = time.perf_counter()
+
+            logger.debug(
+                "event_lifecycle stage=dispatch_started "
+                "event_type=%s event_id=%s source=%s",
+                _event_type_name(event),
+                event.event_id,
+                _safe_log_source(event.source),
+            )
 
             try:
                 await self._dispatch(
                     event,
+                )
+            except BaseException as error:
+                logger.debug(
+                    "event_lifecycle stage=dispatch_terminated "
+                    "event_type=%s event_id=%s source=%s "
+                    "termination_type=%s duration_ms=%.3f",
+                    _event_type_name(event),
+                    event.event_id,
+                    _safe_log_source(event.source),
+                    _exception_type_name(error),
+                    (time.perf_counter() - started_at) * 1000,
+                )
+                raise
+            else:
+                logger.debug(
+                    "event_lifecycle stage=dispatch_completed "
+                    "event_type=%s event_id=%s source=%s "
+                    "duration_ms=%.3f",
+                    _event_type_name(event),
+                    event.event_id,
+                    _safe_log_source(event.source),
+                    (time.perf_counter() - started_at) * 1000,
                 )
             finally:
                 self._queue.task_done()
@@ -241,15 +339,51 @@ class EventBus:
         Cancellation 和其他 BaseException 保持终止语义。
         """
 
+        handler_id = _handler_identity(
+            handler,
+        )
+        started_at = time.perf_counter()
+
         try:
             await handler(
                 event,
             )
         except asyncio.CancelledError:
+            logger.debug(
+                "handler_lifecycle stage=cancelled "
+                "event_type=%s event_id=%s source=%s "
+                "handler=%s duration_ms=%.3f",
+                _event_type_name(event),
+                event.event_id,
+                _safe_log_source(event.source),
+                handler_id,
+                (time.perf_counter() - started_at) * 1000,
+            )
             raise
-        except Exception:
-            # Task 4 将在此边界增加安全 failure observability。
+        except Exception as error:
+            logger.error(
+                "handler_lifecycle stage=failed "
+                "event_type=%s event_id=%s source=%s "
+                "handler=%s exception_type=%s duration_ms=%.3f",
+                _event_type_name(event),
+                event.event_id,
+                _safe_log_source(event.source),
+                handler_id,
+                _exception_type_name(error),
+                (time.perf_counter() - started_at) * 1000,
+            )
             return
+
+        logger.debug(
+            "handler_lifecycle stage=completed "
+            "event_type=%s event_id=%s source=%s "
+            "handler=%s duration_ms=%.3f",
+            _event_type_name(event),
+            event.event_id,
+            _safe_log_source(event.source),
+            handler_id,
+            (time.perf_counter() - started_at) * 1000,
+        )
 
     async def _stop_dispatcher(self) -> None:
         """
@@ -269,8 +403,8 @@ class EventBus:
         except asyncio.CancelledError:
             pass
         except Exception:
-            # Unexpected dispatcher failure is terminal.
-            # Task 4 will add safe diagnostics at this boundary.
+            # Unexpected dispatcher failure is observed by
+            # _on_dispatcher_done().
             pass
 
     async def _force_terminal_cleanup(self) -> None:
@@ -297,8 +431,31 @@ class EventBus:
         Event Bus 不自动 restart dispatcher。
         """
 
-        if not task.cancelled():
-            task.exception()
+        state_at_completion = self._state
+
+        if task.cancelled():
+            if state_at_completion is _EventBusState.RUNNING:
+                logger.error(
+                    "event_bus_dispatcher_terminal "
+                    "reason=unexpected_cancellation state=%s",
+                    state_at_completion.name,
+                )
+        else:
+            error = task.exception()
+
+            if error is not None:
+                logger.error(
+                    "event_bus_dispatcher_terminal "
+                    "reason=exception state=%s exception_type=%s",
+                    state_at_completion.name,
+                    _exception_type_name(error),
+                )
+            elif state_at_completion is _EventBusState.RUNNING:
+                logger.error(
+                    "event_bus_dispatcher_terminal "
+                    "reason=unexpected_return state=%s",
+                    state_at_completion.name,
+                )
 
         if self._state in (
             _EventBusState.RUNNING,
@@ -328,5 +485,15 @@ class EventBus:
         将 Event Bus 标记为 terminal CLOSED。
         """
 
+        if self._state is _EventBusState.CLOSED:
+            return
+
+        previous_state = self._state
+
         self._state = _EventBusState.CLOSED
         self._closed_event.set()
+
+        logger.info(
+            "event_bus_closed previous_state=%s",
+            previous_state.name,
+        )
