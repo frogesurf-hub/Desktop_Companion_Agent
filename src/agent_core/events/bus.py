@@ -27,11 +27,14 @@ class EventBus:
     """
     Runtime Event 的异步进程内总线。
 
-    Task 2 建立 bounded queue、静态订阅、exact-type routing
-    与 fail-fast queue-admission publish 语义。
+    Event Bus 提供：
 
-    完整 shutdown、failure isolation 与 cancellation
-    将在 Task 3 中完成。
+    - bounded fail-fast queue admission；
+    - static exact-type subscriptions；
+    - single-dispatcher FIFO Event processing；
+    - concurrent sibling subscribers；
+    - ordinary subscriber failure isolation；
+    - explicit lifecycle and graceful shutdown。
     """
 
     def __init__(
@@ -54,7 +57,10 @@ class EventBus:
         ] = defaultdict(list)
 
         self._state = _EventBusState.NEW
+
         self._dispatcher_task: asyncio.Task[None] | None = None
+
+        self._closed_event = asyncio.Event()
 
     def subscribe(
         self,
@@ -91,9 +97,15 @@ class EventBus:
 
         self._state = _EventBusState.RUNNING
 
-        self._dispatcher_task = asyncio.create_task(
+        dispatcher_task = asyncio.create_task(
             self._dispatch_loop(),
             name="event-bus-dispatcher",
+        )
+
+        self._dispatcher_task = dispatcher_task
+
+        dispatcher_task.add_done_callback(
+            self._on_dispatcher_done,
         )
 
     async def publish(
@@ -123,6 +135,40 @@ class EventBus:
                 "EventBus queue is full"
             ) from None
 
+    async def close(self) -> None:
+        """
+        关闭 Event Bus。
+
+        RUNNING 状态执行 graceful drain。
+        重复调用 close 是幂等的。
+
+        如果 graceful close 本身被外部取消，
+        Event Bus 会强制终止 dispatcher 并完成 terminal cleanup，
+        然后继续向调用者传播 cancellation。
+        """
+
+        if self._state is _EventBusState.CLOSED:
+            return
+
+        if self._state is _EventBusState.NEW:
+            self._mark_closed()
+            return
+
+        if self._state is _EventBusState.CLOSING:
+            await self._closed_event.wait()
+            return
+
+        self._state = _EventBusState.CLOSING
+
+        try:
+            await self._queue.join()
+            await self._stop_dispatcher()
+        except asyncio.CancelledError:
+            await self._force_terminal_cleanup()
+            raise
+        finally:
+            self._mark_closed()
+
     async def _dispatch_loop(self) -> None:
         """
         按 queue admission 顺序持续 dispatch Event。
@@ -143,10 +189,10 @@ class EventBus:
         event: RuntimeEvent,
     ) -> None:
         """
-        将 Event 路由给其 exact concrete type 的 subscribers。
+        并发执行当前 Event 的所有 exact-type subscribers。
 
-        Task 2 暂时顺序执行 subscriber；
-        Task 3 将实现正式的并发与 failure isolation 契约。
+        当前 Event 的 subscriber 全部 settle 后，
+        dispatcher 才会处理下一个 Event。
         """
 
         handlers = self._subscriptions.get(
@@ -154,7 +200,133 @@ class EventBus:
             (),
         )
 
-        for handler in handlers:
+        if not handlers:
+            return
+
+        tasks = [
+            asyncio.create_task(
+                self._run_handler(
+                    handler,
+                    event,
+                )
+            )
+            for handler in handlers
+        ]
+
+        try:
+            await asyncio.gather(
+                *tasks,
+            )
+        except BaseException:
+            for task in tasks:
+                if not task.done():
+                    task.cancel()
+
+            await asyncio.gather(
+                *tasks,
+                return_exceptions=True,
+            )
+
+            raise
+
+    async def _run_handler(
+        self,
+        handler: EventHandler[RuntimeEvent],
+        event: RuntimeEvent,
+    ) -> None:
+        """
+        执行单个 subscriber 的隔离边界。
+
+        普通 Exception 在 subscriber 边界被隔离。
+        Cancellation 和其他 BaseException 保持终止语义。
+        """
+
+        try:
             await handler(
                 event,
             )
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            # Task 4 将在此边界增加安全 failure observability。
+            return
+
+    async def _stop_dispatcher(self) -> None:
+        """
+        停止并回收 private dispatcher task。
+        """
+
+        dispatcher_task = self._dispatcher_task
+
+        if dispatcher_task is None:
+            return
+
+        if not dispatcher_task.done():
+            dispatcher_task.cancel()
+
+        try:
+            await dispatcher_task
+        except asyncio.CancelledError:
+            pass
+        except Exception:
+            # Unexpected dispatcher failure is terminal.
+            # Task 4 will add safe diagnostics at this boundary.
+            pass
+
+    async def _force_terminal_cleanup(self) -> None:
+        """
+        强制终止 Event Bus 并清理仍然 accepted 的待处理 Event。
+
+        仅用于 graceful shutdown 被取消或 dispatcher
+        已无法继续正常处理 accepted work 的 terminal path。
+        """
+
+        try:
+            await self._stop_dispatcher()
+        finally:
+            self._discard_pending_events()
+            self._mark_closed()
+
+    def _on_dispatcher_done(
+        self,
+        task: asyncio.Task[None],
+    ) -> None:
+        """
+        处理 private dispatcher 的 terminal completion。
+
+        Event Bus 不自动 restart dispatcher。
+        """
+
+        if not task.cancelled():
+            task.exception()
+
+        if self._state in (
+            _EventBusState.RUNNING,
+            _EventBusState.CLOSING,
+        ):
+            self._discard_pending_events()
+            self._mark_closed()
+
+    def _discard_pending_events(self) -> None:
+        """
+        清理 terminal path 中无法继续 dispatch 的 queued Events。
+
+        每个从 Queue 移除的 Event 都必须匹配一次 task_done，
+        以保证 Queue unfinished-task accounting 正确结束。
+        """
+
+        while True:
+            try:
+                self._queue.get_nowait()
+            except asyncio.QueueEmpty:
+                return
+            else:
+                self._queue.task_done()
+
+    def _mark_closed(self) -> None:
+        """
+        将 Event Bus 标记为 terminal CLOSED。
+        """
+
+        self._state = _EventBusState.CLOSED
+        self._closed_event.set()
