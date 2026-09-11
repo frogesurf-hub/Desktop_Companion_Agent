@@ -67,7 +67,7 @@ This installs:
 
 ## 2. Project Structure
 
-Phase 1 high-level structure:
+Phase 2 high-level structure:
 
 ```text
 Desktop_Companion_Agent
@@ -78,12 +78,17 @@ Desktop_Companion_Agent
 │   ├── PHASE_0_CHECKPOINT.md
 │   ├── PHASE_1_CHECKPOINT.md
 │   ├── PHASE_1_PROVIDER_LAYER_DESIGN.md
-│   └── PHASE_1_DEEPSEEK_ADAPTER_DESIGN.md
+│   ├── PHASE_1_DEEPSEEK_ADAPTER_DESIGN.md
+│   ├── PHASE_2_ARCHITECTURE_REVIEW.md
+│   ├── PHASE_2_CHECKPOINT.md
+│   ├── PHASE_2_EVENT_SYSTEM_DESIGN.md
+│   └── PHASE_2_TASK_PLAN.md
 ├── src
 │   ├── agent_core
 │   │   ├── communication
 │   │   ├── config
 │   │   ├── core
+│   │   ├── events
 │   │   ├── observability
 │   │   ├── providers
 │   │   ├── tests
@@ -406,6 +411,14 @@ for documented environment-variable names without real values.
 
 Provider configuration should remain replaceable and must not be hard-coded into business logic.
 
+Current EventBus operational configuration:
+
+```text
+DCA_EVENT_BUS_QUEUE_CAPACITY=256
+```
+
+The queue capacity must remain positive and configurable through `Settings`; the default value is operational configuration, not an architecture guarantee.
+
 ---
 
 ## 12. Git Workflow
@@ -603,7 +616,7 @@ A development task is complete when all relevant items are satisfied:
 
 ## 20. Current Development Baseline
 
-Phase 1 baseline (2026-09-09):
+Phase 2 baseline (2026-09-12):
 
 - Windows 11 primary environment
 - C# WPF desktop layer
@@ -620,49 +633,81 @@ Phase 1 baseline (2026-09-09):
 - JSON message envelope implemented in both Python and C#
 - protocol error isolation implemented for malformed input
 - C# `IAgentConnection` transport abstraction implemented
-- C# independent receive loop implemented for future proactive messages
+- C# independent receive loop retained for future proactive messages
 - ConnectionProbe available for transport diagnostics
 - WPF ViewModel + Application Service layering implemented
 - provider-neutral asynchronous `LLMProvider` contract implemented
-- immutable Provider request / response models implemented
-- provider-neutral error hierarchy implemented
-- real DeepSeek provider adapter implemented through `openai.AsyncOpenAI`
-- default model `deepseek-v4-flash`
-- non-streaming Phase 1 provider path
-- explicit 60-second default application timeout
-- SDK automatic retries disabled
+- real DeepSeek Provider adapter implemented through `openai.AsyncOpenAI`
+- non-streaming Provider path with explicit timeout / zero automatic retry baseline
 - safe Provider Error -> Desktop protocol mapping implemented
-- DeepSeek Provider lifetime owned by the composition root
-- real ConnectionProbe <-> Python <-> DeepSeek round trip verified
-- real WPF <-> Python <-> DeepSeek round trip verified
-- deliberate real authentication failure mapped safely
-- logs manually reviewed for sensitive Provider-data leakage
-- final Python acceptance: 66 pytest tests passed, Ruff passed, mypy passed on 28 source files
+- immutable `RuntimeEvent` foundation implemented
+- narrow asynchronous `EventPublisher` capability implemented
+- bounded asynchronous in-process EventBus implemented
+- exact-type routing implemented
+- fail-fast EventBus queue-overload admission implemented
+- explicit EventBus lifecycle / graceful drain implemented
+- concurrent sibling Event handlers + ordinary failure isolation implemented
+- safe Event lifecycle observability implemented
+- Event payload logging regression protection implemented
+- EventBus lifetime owned by the Python composition root
+- `DCA_EVENT_BUS_QUEUE_CAPACITY` configuration added; default 256, positive only
+- Provider lifetime remains protected across EventBus/runtime failures
+- real WPF <-> Python <-> DeepSeek round trip re-verified after EventBus integration
+- Phase 2 final Python acceptance: 104 pytest tests passed, Ruff passed, mypy passed on 38 source files
+- Phase 2 changed no C# source; C# build was therefore not required by the accepted final gate
 - SQLite remains planned as the first persistent database
 - local-model support remains planned
-- Git is the source of development history
+- Git remains the source of development history
+
+Final phase-quality trio:
+
+```powershell
+python -m pytest -q
+python -m ruff check .
+python -m mypy src
+```
+
+For ordinary implementation tasks, continue using directly relevant targeted pytest / Ruff / mypy first. The full trio is a phase-final project-owner gate.
 
 Important distinction:
 
 - Phase 0 cross-language runtime foundation is complete.
 - Phase 1 original AI MVP / real LLM path is complete.
-- Phase 2 Event System is the next roadmap phase.
+- Phase 2 Event System is complete.
+- Phase 3 Character System is the next roadmap phase.
 
 Current Provider constraints:
 
-- Phase 1 is non-streaming.
-- Phase 1 performs zero automatic retries.
-- no local-model/cloud fallback routing exists yet.
-- Provider roles are currently limited to `system`, `user`, and `assistant`.
-- prompt/persona composition, Memory, Tools, Perception, Situation, Attention, Behavior, Avatar, and Voice remain future work.
+- non-streaming Provider path
+- zero automatic Provider retries
+- no local-model/cloud fallback routing yet
+- Provider roles limited to `system`, `user`, and `assistant`
+
+Current Event System constraints:
+
+- internal Python runtime only
+- exact-type routing only
+- no Event persistence / replay
+- no wildcard subscription
+- no subscriber priority
+- no dynamic unsubscribe baseline
+- no automatic Event retry
+- no multiple dispatcher workers
+- no restart/supervision policy
+- no Desktop Event Bridge
+
+Known shutdown debt:
+
+- abrupt WPF disconnect may produce a WebSocket missing-close-frame error in Python logs; treat this as Desktop/WebSocket shutdown-hardening work, not an EventBus failure.
 
 Context-recovery documents:
 
 - `PROJECT_STATE.md`
-- `docs/PHASE_1_CHECKPOINT.md`
+- `docs/PHASE_2_CHECKPOINT.md`
 
-Historical checkpoint:
+Historical checkpoints:
 
 - `docs/PHASE_0_CHECKPOINT.md`
+- `docs/PHASE_1_CHECKPOINT.md`
 
 This document should continue evolving with each major runtime phase.

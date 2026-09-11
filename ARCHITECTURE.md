@@ -261,9 +261,9 @@
 
 ------------------------------------------------------------------------
 
-# 15. Phase 1 Implemented Baseline
+# 15. Phase 2 Implemented Baseline
 
-The sections above describe the long-term target architecture. As of the Phase 1 checkpoint (2026-09-09), the implemented runtime now includes the original real-LLM MVP.
+The sections above describe the long-term target architecture. As of the Phase 2 checkpoint (2026-09-12), the implemented runtime includes the original real-LLM MVP plus an explicit internal Event System.
 
 ## 15.1 Current Desktop Runtime
 
@@ -277,7 +277,7 @@ App.xaml.cs
   -> AgentMessage
 ```
 
-Responsibilities:
+Responsibilities remain:
 
 - `App.xaml.cs`: Desktop composition root
 - `MainWindow`: WPF view and UI event forwarding
@@ -285,9 +285,11 @@ Responsibilities:
 - `AgentClientService`: application-level chat behavior and independent receive loop
 - `IAgentConnection`: transport abstraction
 - `WebSocketAgentConnection`: WebSocket + JSON transport implementation
-- `AgentMessage`: C# representation of the protocol envelope
+- `AgentMessage`: C# representation of the Desktop protocol envelope
 
 The independent receive loop remains an intentional architectural requirement for future proactive messages.
+
+Phase 2 made no C# source changes.
 
 ## 15.2 Current Python Runtime
 
@@ -296,35 +298,38 @@ main.py
   -> Settings
   -> Logging
   -> DeepSeekProvider
+  -> EventBus
   -> Agent
   -> WebSocketServer
-  -> Message
 ```
 
-More precisely:
+Composition-root lifetime:
 
 ```text
-main.py
-  -> get_settings()
-  -> validate provider selection
-  -> unwrap SecretStr at the composition root
-  -> create DeepSeekProvider
+create DeepSeekProvider
+  -> establish Provider cleanup boundary
+  -> create EventBus(queue_capacity from Settings)
   -> create Agent(provider)
   -> create WebSocketServer(agent)
-  -> await server.run()
-  -> finally await provider.aclose()
+  -> await EventBus.start()
+  -> await WebSocketServer.run()
+  -> finally await EventBus.close()
+  -> finally await Provider.aclose()
 ```
 
 Responsibilities:
 
-- `main.py`: Python composition root, provider construction, async runtime entry, provider lifetime
+- `main.py`: Python composition root and runtime lifetime ownership
 - `Settings`: environment / `.env` runtime configuration
 - `Logging`: console + rotating-file observability
 - `WebSocketServer`: connection lifecycle, protocol parsing, error isolation, response transport
-- `Message`: Python protocol envelope
+- `Message`: Python Desktop-protocol envelope
 - `Agent`: protocol-to-provider orchestration and safe Provider error mapping
 - `LLMProvider`: provider-neutral asynchronous Agent-facing contract
 - `DeepSeekProvider`: concrete DeepSeek / OpenAI-compatible adapter
+- `RuntimeEvent`: internal Event metadata foundation
+- `EventPublisher`: narrow publication capability
+- `EventBus`: internal asynchronous routing / dispatch / lifecycle service
 
 ## 15.3 Provider Layer
 
@@ -349,14 +354,14 @@ DeepSeek API
 
 Boundary rules:
 
-- Agent Core must not import DeepSeek/OpenAI SDK types.
-- vendor exceptions are translated inside the adapter.
+- Agent Core public boundaries remain provider-neutral.
+- vendor exceptions are translated inside adapters.
 - Provider failures cross into Agent as provider-neutral errors.
 - Desktop receives stable safe error codes/messages.
 - API keys are unwrapped only at provider construction.
-- external async client lifetime is owned by the composition root.
+- external async Provider lifetime is owned by the composition root.
 
-Phase 1 Provider behavior:
+Current Provider behavior:
 
 ```text
 async
@@ -367,7 +372,95 @@ zero automatic retries
 asyncio cancellation propagation
 ```
 
-## 15.4 Current Cross-Process Flow
+## 15.4 Runtime Event Model
+
+Internal Runtime Events are facts / notifications that describe something that already happened.
+
+They are not:
+
+- commands
+- permission grants
+- synchronous requests
+- return-value channels
+
+Base metadata:
+
+```text
+RuntimeEvent
+  source
+  event_id
+  occurred_at
+  correlation_id?
+  causation_id?
+```
+
+Properties:
+
+- immutable
+- Event ID uses UUID identity
+- timestamps are timezone-aware and normalized to UTC
+- source is a non-empty logical identifier
+- optional correlation / causation metadata supports future tracing
+
+Ordinary producers should depend on `EventPublisher`, not the concrete EventBus.
+
+## 15.5 EventBus
+
+Phase 2 EventBus architecture:
+
+```text
+Producer
+  |
+  v
+EventPublisher.publish(event)
+  |
+  v
+bounded in-memory Event queue
+  |
+  v
+single dispatcher
+  |
+  +--> exact-type subscribers for Event A (concurrent siblings)
+  |
+  +--> next queued Event only after A handlers settle
+```
+
+Accepted semantics:
+
+- async, in-process service
+- bounded queue
+- fail-fast queue-full admission via `EventBusFullError`
+- exact concrete Event-type routing
+- static subscription registration before running
+- publish completes when queue admission succeeds; it does not wait for handlers
+- queue admission order defines Event dispatch order
+- sibling subscribers for one Event may run concurrently
+- ordinary subscriber failures are isolated
+- later Events continue after ordinary handler failure
+- cancellation is not converted into an ordinary failure
+- graceful close drains accepted Events
+- explicit lifecycle: NEW -> RUNNING -> CLOSING -> CLOSED
+- no Event persistence / replay in Phase 2
+
+The EventBus is deliberately separate from the WebSocket Desktop transport. Internal Runtime Events do not automatically cross process boundaries.
+
+## 15.6 Event Observability
+
+EventBus observability records safe metadata for diagnosis:
+
+- lifecycle state changes
+- Event ID / type / sanitized source
+- handler identity where useful
+- duration where useful
+- failure exception type
+
+Default Event logging must not dump full Event payloads or subscriber/dispatcher exception messages.
+
+This protects future Event payloads from becoming an accidental sensitive-data logging channel.
+
+## 15.7 Current Cross-Process Flow
+
+The Phase 1 request/response path remains unchanged in role:
 
 ```text
 WPF UI
@@ -389,12 +482,9 @@ WPF UI
   -> WPF UI
 ```
 
-Phase 1 verified this flow using both:
+Phase 2 final acceptance verified this real path still works for two consecutive WPF requests while EventBus is running.
 
-- `tools/DesktopCompanion.ConnectionProbe`
-- the real WPF UI
-
-## 15.5 Provider Failure Flow
+## 15.8 Provider Failure Flow
 
 ```text
 DeepSeek / SDK failure
@@ -405,16 +495,32 @@ DeepSeek / SDK failure
   -> WPF
 ```
 
-The Provider boundary prevents raw vendor diagnostics from becoming the Desktop contract.
+The Provider boundary continues to prevent raw vendor diagnostics from becoming the Desktop contract.
 
-## 15.6 Still Not Implemented
+## 15.9 Event / Command / Permission Boundary
 
-The following target-architecture modules remain design-level only:
+Persistent rule:
 
-- Event Bus / Event System
+```text
+Event != Command
+Intent != Permission
+```
+
+An Event communicates a fact or notification.
+
+A future command/request boundary must remain explicit when the system wants something to happen.
+
+A future permission boundary must separately decide whether an intended sensitive action is allowed.
+
+Do not infer authorization from Event source, Event existence, character intent, or Behavior output.
+
+## 15.10 Still Not Implemented
+
+The following target-architecture modules remain design-level or future-phase work:
+
 - Character Core
 - Memory System
-- Internal State
+- Internal State business logic
 - Perception Layer
 - Situation Engine
 - Attention Engine
@@ -424,18 +530,38 @@ The following target-architecture modules remain design-level only:
 - Embodiment Layer
 - local-model routing / cloud fallback
 - voice
+- Desktop Event Bridge
+
+The Event System also deliberately omits:
+
+- Event persistence / replay
+- wildcard routing
+- subscriber priority
+- dynamic unsubscribe
+- automatic Event retry
+- multiple dispatch workers
+- restart / supervision policy
 
 Do not infer implementation merely because a module exists in the target diagram.
 
-## 15.7 Boundary Rule
+## 15.11 Boundary Rule
 
-Future implementation should extend the verified Phase 1 vertical slice without collapsing layers.
+Future phases should extend the verified Phase 0-2 runtime without collapsing layers.
 
 In particular:
 
-- UI must not own WebSocket / provider / memory logic
-- WebSocket must not own Agent or Provider construction
-- provider-specific code must not become the Agent Core API
-- Event System work should introduce explicit event boundaries before later proactive systems are added
-- proactive behavior must use an event/attention path rather than UI polling
+- UI must not own Agent reasoning, Provider, Memory, Tool, or EventBus lifecycle logic
+
+- WebSocket transport must not own Agent / Provider / EventBus construction
+
+- provider-specific code must not become the Agent Core public API
+
+- ordinary Event producers should receive narrow publisher capability where possible
+
+- Runtime Events should remain facts; commands remain explicit
+
+- proactive behavior should use Event -> Situation -> Attention -> Behavior flow rather than UI polling
+
 - sensitive actions must pass through Permission Layer
+
+- real and fictional state must remain separate

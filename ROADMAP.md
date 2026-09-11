@@ -1,8 +1,8 @@
 # Desktop Companion Agent Roadmap
 
-> Re-baselined after the Phase 1 checkpoint on 2026-09-09.
+> Re-baselined after the Phase 2 checkpoint on 2026-09-12.
 >
-> Phase 0 established the Desktop/WebSocket cross-language foundation. Phase 1 completed the original AI MVP with a provider-neutral DeepSeek path. Phase 2 is now the active next phase.
+> Phase 0 established the Desktop/WebSocket cross-language foundation. Phase 1 completed the original AI MVP with a provider-neutral DeepSeek path. Phase 2 established the runtime Event System. Phase 3 is now the active next phase.
 
 ## Phase 0 - Engineering Foundation and Cross-Language Vertical Slice
 
@@ -28,8 +28,6 @@ Completed:
 - [x] WPF ViewModel / Application Service layering
 - [x] real WPF -> Python -> Agent -> WPF round trip
 
-Phase 0 deliberately ends with an echo Agent rather than a real LLM.
-
 See:
 
 - `PROJECT_STATE.md`
@@ -49,8 +47,8 @@ Completed:
 - [x] provider-neutral error hierarchy
 - [x] DeepSeek adapter through `AsyncOpenAI`
 - [x] configurable DeepSeek model / timeout / thinking settings
-- [x] explicit non-streaming Phase 1 path
-- [x] explicit timeout and cancellation semantics
+- [x] explicit non-streaming Provider path
+- [x] timeout and cancellation semantics
 - [x] SDK automatic retries disabled
 - [x] Provider failure -> safe Desktop protocol error mapping
 - [x] composition-root Provider construction / cleanup
@@ -70,45 +68,88 @@ mypy passed on 28 source files
 
 See:
 
-- `PROJECT_STATE.md`
 - `docs/PHASE_1_CHECKPOINT.md`
-
-Not included:
-
-- Memory
-- Perception
-- Avatar
-- Tools
-- autonomous actions
-- streaming
-- automatic provider retry
-- local-model fallback
 
 ---
 
 ## Phase 2 - Event System
 
-Status: **Next**
+Status: **Complete**
 
-Goal:
+Goal achieved:
 
-Establish the Event Bus / runtime event model so modules do not hard-call each other.
+Establish a durable in-process runtime Event model / EventBus so future modules can communicate through explicit Event boundaries instead of direct concrete-module calls.
 
-Planned:
+Completed:
 
-- event envelope
-- event routing
-- subscriber boundaries
-- event lifecycle / logging
-- Desktop / runtime event bridge where needed
+- [x] immutable `RuntimeEvent` metadata foundation
+- [x] UUID Event identity
+- [x] timezone-aware UTC occurrence timestamps
+- [x] source / correlation / causation metadata
+- [x] narrow `EventPublisher` capability
+- [x] asynchronous subscriber contract
+- [x] bounded in-process EventBus
+- [x] exact-type routing
+- [x] queue-admission-order dispatch
+- [x] fail-fast `EventBusFullError` overload admission
+- [x] explicit EventBus lifecycle
+- [x] graceful close / accepted-queue drain
+- [x] concurrent sibling subscribers for one Event
+- [x] ordinary subscriber failure isolation
+- [x] cancellation semantics / task cleanup
+- [x] safe Event lifecycle observability
+- [x] sensitive-payload logging regression tests
+- [x] composition-root EventBus ownership
+- [x] configurable queue capacity through existing Settings
+- [x] Provider cleanup protection across EventBus/runtime failures
+- [x] preservation of Phase 1 WPF -> Python -> DeepSeek -> WPF path
+- [x] final full Python quality gate
+
+Final Python acceptance:
+
+```text
+104 pytest tests passed
+Ruff passed
+mypy passed on 38 source files
+```
+
+Manual acceptance:
+
+- EventBus startup observed with queue capacity 256
+- two consecutive real WPF -> DeepSeek responses succeeded
+- EventBus closing / closed lifecycle observed during runtime shutdown
+
+Not included by design:
+
+- Character / Memory / Perception / Situation / Attention / Behavior business logic
+- Permission / Tool business logic
+- Avatar / Voice
+- Desktop Event Bridge
+- Event persistence / replay
+- wildcard subscriptions
+- subscriber priority
+- dynamic unsubscribe
+- automatic Event retries
+- multiple dispatcher workers
+- restart / supervision policy
+
+See:
+
+- `docs/PHASE_2_CHECKPOINT.md`
+- `docs/PHASE_2_EVENT_SYSTEM_DESIGN.md`
+- `docs/PHASE_2_ARCHITECTURE_REVIEW.md`
+- `docs/PHASE_2_TASK_PLAN.md`
+- ADR 0010 / 0011 / 0012
 
 ---
 
 ## Phase 3 - Character System
 
+Status: **Next**
+
 Goal:
 
-Define stable character and user-context boundaries.
+Define stable character and user-context boundaries on top of the verified Provider/WebSocket/EventBus runtime.
 
 Planned:
 
@@ -122,7 +163,7 @@ Planned:
 
 Principle:
 
-Character personality cannot override truth, permission, or security boundaries.
+Character personality cannot override truth, permission, security, or factual-state boundaries.
 
 ---
 
@@ -297,9 +338,7 @@ Intent != Permission
 
 Planned:
 
-- Ollama
-- LM Studio
-- llama.cpp-compatible adapters
+- local-provider adapters
 - Local / Hybrid / Cloud routing
 - graceful cloud failure / fallback
 
@@ -324,7 +363,7 @@ Fictional state remains isolated from factual memory and tool reasoning.
 Prefer:
 
 1. stable architecture
-2. event boundaries
+2. explicit Event / command / permission boundaries
 3. memory correctness
 4. situation / attention / proactivity
 5. perception
