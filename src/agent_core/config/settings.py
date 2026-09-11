@@ -53,7 +53,7 @@ class Settings(BaseSettings):
 
     deepseek_api_key: SecretStr | None = None
 
-    deepseek_model: str = "deepseek-v4-flash"
+    deepseek_model: str = "deepseek-flash"
 
     deepseek_timeout_seconds: float = Field(
         default=60.0,

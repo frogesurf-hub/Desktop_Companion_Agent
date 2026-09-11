@@ -157,7 +157,7 @@ Configuration:
 ```text
 DCA_MODEL_PROVIDER=deepseek
 DCA_DEEPSEEK_API_KEY=<local secret>
-DCA_DEEPSEEK_MODEL=deepseek-v4-flash
+DCA_DEEPSEEK_MODEL=deepseek-flash
 DCA_DEEPSEEK_TIMEOUT_SECONDS=60
 DCA_DEEPSEEK_THINKING_ENABLED=false
 ```

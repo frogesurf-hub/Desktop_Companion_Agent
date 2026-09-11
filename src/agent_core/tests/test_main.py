@@ -34,7 +34,7 @@ def _make_settings(
         event_bus_queue_capacity=17,
         model_provider=model_provider,
         deepseek_api_key=secret,
-        deepseek_model="deepseek-v4-flash",
+        deepseek_model="deepseek-flash",
         deepseek_timeout_seconds=45.0,
         deepseek_thinking_enabled=False,
         log_level="DEBUG",
@@ -324,7 +324,7 @@ def test_run_initializes_deepseek_and_event_runtime(
         "provider_init",
         {
             "api_key": "test-secret-key",
-            "model": "deepseek-v4-flash",
+            "model": "deepseek-flash",
             "timeout_seconds": 45.0,
             "thinking_enabled": False,
         },

@@ -69,7 +69,7 @@ def test_settings_default_values(
 
     assert settings.deepseek_api_key is None
 
-    assert settings.deepseek_model == "deepseek-v4-flash"
+    assert settings.deepseek_model == "deepseek-flash"
 
     assert settings.deepseek_timeout_seconds == 60.0
 

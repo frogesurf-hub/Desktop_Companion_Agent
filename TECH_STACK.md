@@ -226,6 +226,10 @@ Phase 1 实际实现：
 
     deepseek-v4-flash
 
+当前运行时模型别名（Phase 2 checkpoint 后 maintenance）：
+
+- deepseek-flash
+
 Python client：
 
     openai.AsyncOpenAI

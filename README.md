@@ -105,7 +105,7 @@ Provider baseline:
 ```text
 LLMProvider: provider-neutral async Protocol
 DeepSeek client: openai.AsyncOpenAI
-Default model: deepseek-v4-flash
+Default model: deepseek-flash
 Streaming: disabled in Phase 1
 Thinking: disabled by default
 Default timeout: 60 seconds
@@ -183,6 +183,9 @@ DCA_DEEPSEEK_MODEL=deepseek-v4-flash
 DCA_DEEPSEEK_TIMEOUT_SECONDS=60
 DCA_DEEPSEEK_THINKING_ENABLED=false
 ```
+
+Current runtime model alias after the Phase 2 checkpoint:
+`deepseek-flash`.
 
 ### 3. Start Agent Core
 

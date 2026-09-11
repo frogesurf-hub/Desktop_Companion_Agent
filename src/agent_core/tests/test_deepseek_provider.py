@@ -243,7 +243,7 @@ def test_deepseek_provider_maps_request_and_response(
 
     provider = DeepSeekProvider(
         api_key="test-key",
-        model="deepseek-v4-flash",
+        model="deepseek-flash",
         timeout_seconds=60.0,
         thinking_enabled=False,
     )
@@ -269,7 +269,7 @@ def test_deepseek_provider_maps_request_and_response(
 
     assert len(calls) == 1
 
-    assert calls[0]["model"] == "deepseek-v4-flash"
+    assert calls[0]["model"] == "deepseek-flash"
 
     assert calls[0]["stream"] is False
 
