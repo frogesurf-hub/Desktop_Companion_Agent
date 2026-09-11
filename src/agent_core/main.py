@@ -4,6 +4,7 @@ import logging
 from agent_core.communication import WebSocketServer
 from agent_core.config import Settings, get_settings
 from agent_core.core.agent import Agent
+from agent_core.events import EventBus
 from agent_core.observability import setup_logging
 from agent_core.providers import ProviderConfigurationError
 from agent_core.providers.deepseek import DeepSeekProvider
@@ -85,17 +86,27 @@ async def run() -> None:
     )
 
     try:
-        agent = Agent(
-            provider=provider,
+        event_bus = EventBus(
+            queue_capacity=settings.event_bus_queue_capacity,
         )
 
-        server = WebSocketServer(
-            host=settings.websocket_host,
-            port=settings.websocket_port,
-            agent=agent,
-        )
+        try:
+            agent = Agent(
+                provider=provider,
+            )
 
-        await server.run()
+            server = WebSocketServer(
+                host=settings.websocket_host,
+                port=settings.websocket_port,
+                agent=agent,
+            )
+
+            await event_bus.start()
+
+            await server.run()
+
+        finally:
+            await event_bus.close()
 
     finally:
         await provider.aclose()

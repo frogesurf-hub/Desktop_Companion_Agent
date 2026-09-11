@@ -31,6 +31,7 @@ def _make_settings(
         runtime_mode="cloud",
         websocket_host="127.0.0.1",
         websocket_port=9999,
+        event_bus_queue_capacity=17,
         model_provider=model_provider,
         deepseek_api_key=secret,
         deepseek_model="deepseek-v4-flash",
@@ -46,10 +47,13 @@ def _install_runtime_fakes(
     settings: Settings,
     *,
     server_error: Exception | None = None,
+    event_bus_init_error: Exception | None = None,
+    event_bus_start_error: Exception | None = None,
+    event_bus_close_error: Exception | None = None,
 ) -> None:
     """
     替换 Composition Root 外部组件，
-    避免真实网络和 SDK client。
+    避免真实网络、SDK client 和后台 Event Bus task。
     """
 
     class FakeDeepSeekProvider:
@@ -79,6 +83,44 @@ def _install_runtime_fakes(
                     None,
                 )
             )
+
+    class FakeEventBus:
+        def __init__(
+            self,
+            *,
+            queue_capacity: int,
+        ) -> None:
+            calls.append(
+                (
+                    "event_bus_init",
+                    queue_capacity,
+                )
+            )
+
+            if event_bus_init_error is not None:
+                raise event_bus_init_error
+
+        async def start(self) -> None:
+            calls.append(
+                (
+                    "event_bus_start",
+                    None,
+                )
+            )
+
+            if event_bus_start_error is not None:
+                raise event_bus_start_error
+
+        async def close(self) -> None:
+            calls.append(
+                (
+                    "event_bus_close",
+                    None,
+                )
+            )
+
+            if event_bus_close_error is not None:
+                raise event_bus_close_error
 
     class FakeAgent:
         def __init__(
@@ -161,6 +203,12 @@ def _install_runtime_fakes(
 
     monkeypatch.setattr(
         main_module,
+        "EventBus",
+        FakeEventBus,
+    )
+
+    monkeypatch.setattr(
+        main_module,
         "Agent",
         FakeAgent,
     )
@@ -171,8 +219,64 @@ def _install_runtime_fakes(
         FakeWebSocketServer,
     )
 
+def test_provider_is_closed_when_event_bus_construction_fails(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """
+    验证 Event Bus 构造失败时，
+    已创建的 Provider 仍然会被关闭。
+    """
 
-def test_run_initializes_deepseek_runtime(
+    calls: list[
+        tuple[str, object]
+    ] = []
+
+    settings = _make_settings()
+
+    _install_runtime_fakes(
+        monkeypatch,
+        calls,
+        settings,
+        event_bus_init_error=RuntimeError(
+            "event bus init failed",
+        ),
+    )
+
+    with pytest.raises(
+        RuntimeError,
+        match="event bus init failed",
+    ):
+        asyncio.run(
+            main_module.run(),
+        )
+
+    assert (
+        "event_bus_init",
+        17,
+    ) in calls
+
+    assert not any(
+        name == "agent_init"
+        for name, _ in calls
+    )
+
+    assert not any(
+        name == "event_bus_start"
+        for name, _ in calls
+    )
+
+    assert not any(
+        name == "event_bus_close"
+        for name, _ in calls
+    )
+
+    assert calls[-1] == (
+        "provider_close",
+        None,
+    )
+
+
+def test_run_initializes_deepseek_and_event_runtime(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """
@@ -180,12 +284,14 @@ def test_run_initializes_deepseek_runtime(
 
     1. 读取 Settings
     2. 初始化 Logging
-    3. 解包 API Key
-    4. 创建 DeepSeek Provider
+    3. 创建 DeepSeek Provider
+    4. 创建 Event Bus
     5. 注入 Agent
     6. 创建 WebSocketServer
-    7. 启动 Server
-    8. 关闭 Provider
+    7. 启动 Event Bus
+    8. 启动 Server
+    9. 关闭 Event Bus
+    10. 关闭 Provider
     """
 
     calls: list[
@@ -224,16 +330,31 @@ def test_run_initializes_deepseek_runtime(
         },
     )
 
-    assert calls[3][0] == "agent_init"
+    assert calls[3] == (
+        "event_bus_init",
+        17,
+    )
 
-    assert calls[4][0] == "server_init"
+    assert calls[4][0] == "agent_init"
 
-    assert calls[5] == (
+    assert calls[5][0] == "server_init"
+
+    assert calls[6] == (
+        "event_bus_start",
+        None,
+    )
+
+    assert calls[7] == (
         "server_run",
         None,
     )
 
-    assert calls[6] == (
+    assert calls[8] == (
+        "event_bus_close",
+        None,
+    )
+
+    assert calls[9] == (
         "provider_close",
         None,
     )
@@ -274,12 +395,12 @@ def test_unsupported_model_provider_is_rejected() -> None:
         )
 
 
-def test_provider_is_closed_when_server_fails(
+def test_runtime_resources_are_closed_when_server_fails(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """
     验证 WebSocketServer 异常退出时，
-    Provider client 仍会被关闭。
+    Event Bus 与 Provider 都会被关闭。
     """
 
     calls: list[
@@ -307,6 +428,102 @@ def test_provider_is_closed_when_server_fails(
 
     assert (
         "server_run",
+        None,
+    ) in calls
+
+    assert calls[-2:] == [
+        (
+            "event_bus_close",
+            None,
+        ),
+        (
+            "provider_close",
+            None,
+        ),
+    ]
+
+
+def test_provider_is_closed_when_event_bus_start_fails(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """
+    验证 Event Bus 启动失败时，
+    runtime cleanup 仍会关闭 Event Bus 和 Provider。
+    """
+
+    calls: list[
+        tuple[str, object]
+    ] = []
+
+    settings = _make_settings()
+
+    _install_runtime_fakes(
+        monkeypatch,
+        calls,
+        settings,
+        event_bus_start_error=RuntimeError(
+            "event bus start failed",
+        ),
+    )
+
+    with pytest.raises(
+        RuntimeError,
+        match="event bus start failed",
+    ):
+        asyncio.run(
+            main_module.run(),
+        )
+
+    assert (
+        "server_run",
+        None,
+    ) not in calls
+
+    assert calls[-2:] == [
+        (
+            "event_bus_close",
+            None,
+        ),
+        (
+            "provider_close",
+            None,
+        ),
+    ]
+
+
+def test_provider_is_closed_when_event_bus_close_fails(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """
+    验证 Event Bus cleanup 自身失败时，
+    Provider cleanup 仍然执行。
+    """
+
+    calls: list[
+        tuple[str, object]
+    ] = []
+
+    settings = _make_settings()
+
+    _install_runtime_fakes(
+        monkeypatch,
+        calls,
+        settings,
+        event_bus_close_error=RuntimeError(
+            "event bus close failed",
+        ),
+    )
+
+    with pytest.raises(
+        RuntimeError,
+        match="event bus close failed",
+    ):
+        asyncio.run(
+            main_module.run(),
+        )
+
+    assert (
+        "event_bus_close",
         None,
     ) in calls
 

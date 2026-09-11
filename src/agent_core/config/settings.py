@@ -44,6 +44,11 @@ class Settings(BaseSettings):
     websocket_host: str = "127.0.0.1"
     websocket_port: int = 8765
 
+    event_bus_queue_capacity: int = Field(
+        default=256,
+        gt=0,
+    )
+
     model_provider: str = "deepseek"
 
     deepseek_api_key: SecretStr | None = None

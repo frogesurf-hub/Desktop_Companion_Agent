@@ -11,6 +11,7 @@ DCA_ENVIRONMENT_VARIABLES = [
     "DCA_RUNTIME_MODE",
     "DCA_WEBSOCKET_HOST",
     "DCA_WEBSOCKET_PORT",
+    "DCA_EVENT_BUS_QUEUE_CAPACITY",
     "DCA_MODEL_PROVIDER",
     "DCA_DEEPSEEK_API_KEY",
     "DCA_DEEPSEEK_MODEL",
@@ -62,6 +63,8 @@ def test_settings_default_values(
     assert settings.websocket_host == "127.0.0.1"
     assert settings.websocket_port == 8765
 
+    assert settings.event_bus_queue_capacity == 256
+
     assert settings.model_provider == "deepseek"
 
     assert settings.deepseek_api_key is None
@@ -102,6 +105,11 @@ def test_environment_variables_override_defaults(
     )
 
     monkeypatch.setenv(
+        "DCA_EVENT_BUS_QUEUE_CAPACITY",
+        "64",
+    )
+
+    monkeypatch.setenv(
         "DCA_DEEPSEEK_MODEL",
         "deepseek-v4-pro",
     )
@@ -126,6 +134,8 @@ def test_environment_variables_override_defaults(
     assert settings.runtime_mode == "local"
 
     assert settings.websocket_port == 9001
+
+    assert settings.event_bus_queue_capacity == 64
 
     assert settings.deepseek_model == "deepseek-v4-pro"
 
@@ -155,6 +165,33 @@ def test_invalid_runtime_mode_is_rejected(
     monkeypatch.setenv(
         "DCA_RUNTIME_MODE",
         "invalid-mode",
+    )
+
+    with pytest.raises(
+        ValidationError,
+    ):
+        Settings()
+
+
+def test_invalid_event_bus_queue_capacity_is_rejected(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """
+    验证 Event Bus queue capacity 必须大于零。
+    """
+
+    clear_dca_environment(
+        monkeypatch,
+    )
+
+    monkeypatch.chdir(
+        tmp_path,
+    )
+
+    monkeypatch.setenv(
+        "DCA_EVENT_BUS_QUEUE_CAPACITY",
+        "0",
     )
 
     with pytest.raises(
