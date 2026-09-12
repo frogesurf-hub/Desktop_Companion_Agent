@@ -30,3 +30,9 @@ Phase 2 ADRs:
 - `0010-events-are-facts-commands-remain-explicit-boundaries.md`
 - `0011-async-bounded-in-process-event-bus.md`
 - `0012-fail-fast-event-bus-overload-admission.md`
+
+Phase 3 ADRs:
+
+- `0013-character-definitions-are-structured-domain-data.md`
+- `0014-character-consumes-user-context-memory-owns-user-profile.md`
+- `0015-runtime-temporal-truth-comes-from-clock-context.md`
