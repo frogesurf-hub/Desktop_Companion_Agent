@@ -34,6 +34,10 @@ dev = [
 [tool.setuptools.packages.find]
 where = ["src"]
 
+[tool.setuptools.package-data]
+"agent_core.characters" = [
+    "definitions/*.toml",
+]
 
 [tool.pytest.ini_options]
 pythonpath = [
