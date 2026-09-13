@@ -1,11 +1,11 @@
 import logging
 
+from agent_core.characters import CharacterDefinition
+from agent_core.composition import PromptContextComposer
 from agent_core.core.message import Message
 from agent_core.providers import (
-    LLMMessage,
     LLMProvider,
     LLMProviderError,
-    LLMRequest,
     ProviderAuthenticationError,
     ProviderConfigurationError,
     ProviderConnectionError,
@@ -15,6 +15,10 @@ from agent_core.providers import (
     ProviderResponseError,
     ProviderTimeoutError,
     ProviderUnavailableError,
+)
+from agent_core.temporal import (
+    Clock,
+    TemporalContext,
 )
 
 logger = logging.getLogger(__name__)
@@ -96,9 +100,16 @@ class Agent:
         self,
         provider: LLMProvider,
         name: str = "Desktop Companion",
+        *,
+        character: CharacterDefinition,
+        composer: PromptContextComposer,
+        clock: Clock,
     ) -> None:
         self.name = name
         self._provider = provider
+        self._character = character
+        self._composer = composer
+        self._clock = clock
 
     async def process_message(
         self,
@@ -114,13 +125,16 @@ class Agent:
                 "",
             )
 
-            request = LLMRequest(
-                messages=(
-                    LLMMessage(
-                        role="user",
-                        content=user_text,
-                    ),
-                ),
+            current_datetime = self._clock.now()
+
+            temporal_context = TemporalContext(
+                current_datetime=current_datetime,
+            )
+
+            request = self._composer.compose(
+                character=self._character,
+                temporal_context=temporal_context,
+                user_message=user_text,
             )
 
             try:

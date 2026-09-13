@@ -1,15 +1,56 @@
 import asyncio
 import logging
+from pathlib import Path
 
+from agent_core.characters import (
+    CharacterDefinition,
+    load_character_definitions,
+    resolve_character,
+)
 from agent_core.communication import WebSocketServer
+from agent_core.composition import PromptContextComposer
 from agent_core.config import Settings, get_settings
 from agent_core.core.agent import Agent
 from agent_core.events import EventBus
 from agent_core.observability import setup_logging
 from agent_core.providers import ProviderConfigurationError
 from agent_core.providers.deepseek import DeepSeekProvider
+from agent_core.temporal import SystemClock
 
 logger = logging.getLogger(__name__)
+
+
+_BUILTIN_CHARACTER_DEFINITIONS_DIR = (
+    Path(__file__).resolve().parent
+    / "characters"
+    / "definitions"
+)
+
+
+def _load_active_character(
+    settings: Settings,
+) -> CharacterDefinition:
+    """
+    根据 Runtime Settings 加载并解析当前活动 Character。
+
+    未配置外部 Character 目录时，
+    使用随 agent_core package 分发的内置 definitions。
+    """
+
+    definitions_dir = (
+        settings.character_definitions_dir
+        if settings.character_definitions_dir is not None
+        else _BUILTIN_CHARACTER_DEFINITIONS_DIR
+    )
+
+    definitions = load_character_definitions(
+        definitions_dir,
+    )
+
+    return resolve_character(
+        definitions,
+        settings.active_character_id,
+    )
 
 
 def _create_provider(
@@ -50,6 +91,18 @@ async def run() -> None:
         log_level=settings.log_level,
     )
 
+    active_character = _load_active_character(
+        settings,
+    )
+
+    composer = PromptContextComposer()
+    clock = SystemClock()
+
+    provider = _create_provider(
+        settings,
+    )
+
+
     logger.info(
         "Starting %s",
         settings.app_name,
@@ -81,10 +134,6 @@ async def run() -> None:
         settings.websocket_port,
     )
 
-    provider = _create_provider(
-        settings,
-    )
-
     try:
         event_bus = EventBus(
             queue_capacity=settings.event_bus_queue_capacity,
@@ -93,6 +142,9 @@ async def run() -> None:
         try:
             agent = Agent(
                 provider=provider,
+                character=active_character,
+                composer=composer,
+                clock=clock,
             )
 
             server = WebSocketServer(

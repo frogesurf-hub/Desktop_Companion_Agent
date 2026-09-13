@@ -1,4 +1,5 @@
 from functools import lru_cache
+from pathlib import Path
 from typing import Literal
 
 from pydantic import Field, SecretStr
@@ -48,6 +49,9 @@ class Settings(BaseSettings):
         default=256,
         gt=0,
     )
+    character_definitions_dir: Path | None = None
+
+    active_character_id: str = "aria"
 
     model_provider: str = "deepseek"
 

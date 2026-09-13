@@ -1,13 +1,19 @@
 import asyncio
+from datetime import (
+    datetime,
+    timedelta,
+    timezone,
+)
 
 import pytest
 
+from agent_core.characters import CharacterDefinition
+from agent_core.composition import PromptContextComposer
 from agent_core.core.agent import Agent
 from agent_core.core.message import Message
 from agent_core.providers import (
-    LLMMessage,
+    LLMProvider,
     LLMProviderError,
-    LLMRequest,
     LLMResponse,
     ProviderAuthenticationError,
     ProviderConfigurationError,
@@ -22,7 +28,57 @@ from agent_core.providers import (
 from agent_core.tests.fakes import (
     FailingLLMProvider,
     FakeLLMProvider,
+    FixedClock,
 )
+
+
+def _create_character() -> CharacterDefinition:
+    """
+    创建 Agent 测试使用的稳定 Character。
+    """
+
+    return CharacterDefinition(
+        character_id="test",
+        display_name="Test",
+        identity="A test companion.",
+        persona="Calm.",
+        speech_style="Concise.",
+    )
+
+
+def _create_clock() -> FixedClock:
+    """
+    创建 Agent 测试使用的确定性 Clock。
+    """
+
+    return FixedClock(
+        datetime(
+            2026,
+            9,
+            13,
+            20,
+            0,
+            tzinfo=timezone(
+                timedelta(hours=8),
+            ),
+        )
+    )
+
+
+def _create_agent(
+    provider: LLMProvider,
+) -> Agent:
+    """
+    使用 Phase 3 Runtime dependencies 创建 Agent。
+    """
+
+    return Agent(
+        provider=provider,
+        character=_create_character(),
+        composer=PromptContextComposer(),
+        clock=_create_clock(),
+    )
+
 
 
 def test_message_create() -> None:
@@ -78,8 +134,8 @@ def test_agent_uses_provider_for_chat_message() -> None:
         ),
     )
 
-    agent = Agent(
-        provider=provider,
+    agent = _create_agent(
+        provider,
     )
 
     message = Message(
@@ -103,16 +159,28 @@ def test_agent_uses_provider_for_chat_message() -> None:
         == "来自 Provider 的回复"
     )
 
-    assert provider.requests == [
-        LLMRequest(
-            messages=(
-                LLMMessage(
-                    role="user",
-                    content="你好",
-                ),
-            ),
-        ),
-    ]
+    assert len(provider.requests) == 1
+
+    request = provider.requests[0]
+
+    assert len(request.messages) == 2
+
+    assert request.messages[0].role == "system"
+
+    assert request.messages[1].role == "user"
+    assert request.messages[1].content == "你好"
+
+    system_content = request.messages[0].content
+
+    assert "[Runtime Rules]" in system_content
+    assert "[Temporal Context]" in system_content
+    assert "[Character Identity]" in system_content
+
+    assert "Character ID: test" in system_content
+    assert "Display name: Test" in system_content
+
+    assert "Current date: 2026-09-13" in system_content
+    assert "Current weekday: Sunday" in system_content
 
 
 @pytest.mark.parametrize(
@@ -193,8 +261,8 @@ def test_agent_maps_provider_error_to_safe_protocol_error(
         ),
     )
 
-    agent = Agent(
-        provider=provider,
+    agent = _create_agent(
+        provider,
     )
 
     message = Message(
@@ -235,8 +303,8 @@ def test_agent_rejects_unsupported_message_without_calling_provider() -> None:
         ),
     )
 
-    agent = Agent(
-        provider=provider,
+    agent = _create_agent(
+        provider,
     )
 
     message = Message(

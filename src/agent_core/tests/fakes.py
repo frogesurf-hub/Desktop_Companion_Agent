@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from agent_core.providers import (
     LLMProviderError,
     LLMRequest,
@@ -61,3 +63,18 @@ class FailingLLMProvider:
         )
 
         raise self._error
+
+
+class FixedClock:
+    """
+    测试使用的确定性 Clock。
+    """
+
+    def __init__(
+        self,
+        current_datetime: datetime,
+    ) -> None:
+        self._current_datetime = current_datetime
+
+    def now(self) -> datetime:
+        return self._current_datetime

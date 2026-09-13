@@ -6,6 +6,8 @@ from pydantic import ValidationError
 from agent_core.config import Settings
 
 DCA_ENVIRONMENT_VARIABLES = [
+    "DCA_CHARACTER_DEFINITIONS_DIR",
+    "DCA_ACTIVE_CHARACTER_ID",
     "DCA_APP_NAME",
     "DCA_ENVIRONMENT",
     "DCA_RUNTIME_MODE",
@@ -77,6 +79,10 @@ def test_settings_default_values(
 
     assert settings.log_level == "INFO"
 
+    assert settings.character_definitions_dir is None
+
+    assert settings.active_character_id == "aria"
+
 
 def test_environment_variables_override_defaults(
     monkeypatch: pytest.MonkeyPatch,
@@ -129,6 +135,21 @@ def test_environment_variables_override_defaults(
         "DEBUG",
     )
 
+    character_definitions_dir = (
+        tmp_path
+        / "characters"
+    )
+
+    monkeypatch.setenv(
+        "DCA_CHARACTER_DEFINITIONS_DIR",
+        str(character_definitions_dir),
+    )
+
+    monkeypatch.setenv(
+        "DCA_ACTIVE_CHARACTER_ID",
+        "custom",
+    )
+
     settings = Settings()
 
     assert settings.runtime_mode == "local"
@@ -144,6 +165,13 @@ def test_environment_variables_override_defaults(
     assert settings.deepseek_thinking_enabled is True
 
     assert settings.log_level == "DEBUG"
+
+    assert (
+        settings.character_definitions_dir
+        == character_definitions_dir
+    )
+
+    assert settings.active_character_id == "custom"
 
 
 def test_invalid_runtime_mode_is_rejected(

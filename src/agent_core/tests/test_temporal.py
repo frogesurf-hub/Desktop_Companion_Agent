@@ -13,23 +13,7 @@ from agent_core.temporal import (
     SystemClock,
     TemporalContext,
 )
-
-
-class _FixedClock:
-    """
-    测试专用的确定性 Clock。
-
-    目前只在本测试模块使用，因此不提前放入共享 fakes.py。
-    """
-
-    def __init__(
-        self,
-        current_datetime: datetime,
-    ) -> None:
-        self._current_datetime = current_datetime
-
-    def now(self) -> datetime:
-        return self._current_datetime
+from agent_core.tests.fakes import FixedClock
 
 
 def test_system_clock_returns_timezone_aware_datetime() -> None:
@@ -61,7 +45,7 @@ def test_fixed_clock_satisfies_clock_contract() -> None:
         ),
     )
 
-    clock: Clock = _FixedClock(
+    clock: Clock = FixedClock(
         expected,
     )
 
