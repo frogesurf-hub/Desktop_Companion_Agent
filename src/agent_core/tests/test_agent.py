@@ -1,18 +1,9 @@
 import asyncio
-from datetime import (
-    datetime,
-    timedelta,
-    timezone,
-)
 
 import pytest
 
-from agent_core.characters import CharacterDefinition
-from agent_core.composition import PromptContextComposer
-from agent_core.core.agent import Agent
 from agent_core.core.message import Message
 from agent_core.providers import (
-    LLMProvider,
     LLMProviderError,
     LLMResponse,
     ProviderAuthenticationError,
@@ -28,57 +19,8 @@ from agent_core.providers import (
 from agent_core.tests.fakes import (
     FailingLLMProvider,
     FakeLLMProvider,
-    FixedClock,
+    create_test_agent,
 )
-
-
-def _create_character() -> CharacterDefinition:
-    """
-    创建 Agent 测试使用的稳定 Character。
-    """
-
-    return CharacterDefinition(
-        character_id="test",
-        display_name="Test",
-        identity="A test companion.",
-        persona="Calm.",
-        speech_style="Concise.",
-    )
-
-
-def _create_clock() -> FixedClock:
-    """
-    创建 Agent 测试使用的确定性 Clock。
-    """
-
-    return FixedClock(
-        datetime(
-            2026,
-            9,
-            13,
-            20,
-            0,
-            tzinfo=timezone(
-                timedelta(hours=8),
-            ),
-        )
-    )
-
-
-def _create_agent(
-    provider: LLMProvider,
-) -> Agent:
-    """
-    使用 Phase 3 Runtime dependencies 创建 Agent。
-    """
-
-    return Agent(
-        provider=provider,
-        character=_create_character(),
-        composer=PromptContextComposer(),
-        clock=_create_clock(),
-    )
-
 
 
 def test_message_create() -> None:
@@ -134,7 +76,7 @@ def test_agent_uses_provider_for_chat_message() -> None:
         ),
     )
 
-    agent = _create_agent(
+    agent = create_test_agent(
         provider,
     )
 
@@ -261,7 +203,7 @@ def test_agent_maps_provider_error_to_safe_protocol_error(
         ),
     )
 
-    agent = _create_agent(
+    agent = create_test_agent(
         provider,
     )
 
@@ -303,7 +245,7 @@ def test_agent_rejects_unsupported_message_without_calling_provider() -> None:
         ),
     )
 
-    agent = _create_agent(
+    agent = create_test_agent(
         provider,
     )
 

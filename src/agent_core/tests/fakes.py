@@ -1,6 +1,14 @@
-from datetime import datetime
+from datetime import (
+    datetime,
+    timedelta,
+    timezone,
+)
 
+from agent_core.characters import CharacterDefinition
+from agent_core.composition import PromptContextComposer
+from agent_core.core.agent import Agent
 from agent_core.providers import (
+    LLMProvider,
     LLMProviderError,
     LLMRequest,
     LLMResponse,
@@ -78,3 +86,35 @@ class FixedClock:
 
     def now(self) -> datetime:
         return self._current_datetime
+
+
+def create_test_agent(
+    provider: LLMProvider,
+) -> Agent:
+    """
+    创建具备完整 Phase 3 Runtime dependencies 的测试 Agent。
+    """
+
+    return Agent(
+        provider=provider,
+        character=CharacterDefinition(
+            character_id="test",
+            display_name="Test",
+            identity="A test companion.",
+            persona="Calm.",
+            speech_style="Concise.",
+        ),
+        composer=PromptContextComposer(),
+        clock=FixedClock(
+            datetime(
+                2026,
+                9,
+                13,
+                20,
+                0,
+                tzinfo=timezone(
+                    timedelta(hours=8),
+                ),
+            )
+        ),
+    )

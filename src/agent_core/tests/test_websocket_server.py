@@ -10,7 +10,10 @@ from agent_core.communication import WebSocketServer
 from agent_core.core.agent import Agent
 from agent_core.core.message import Message
 from agent_core.providers import LLMResponse
-from agent_core.tests.fakes import FakeLLMProvider
+from agent_core.tests.fakes import (
+    FakeLLMProvider,
+    create_test_agent,
+)
 
 
 def _get_free_port() -> int:
@@ -43,8 +46,8 @@ def _create_agent(
         ),
     )
 
-    return Agent(
-        provider=provider,
+    return create_test_agent(
+        provider,
     )
 
 

@@ -8,13 +8,13 @@ from websockets.asyncio.client import (
 )
 
 from agent_core.communication import WebSocketServer
-from agent_core.core.agent import Agent
 from agent_core.core.message import Message
 from agent_core.providers import (
     LLMRequest,
     LLMResponse,
     ProviderTimeoutError,
 )
+from agent_core.tests.fakes import create_test_agent
 
 
 class FailThenSucceedProvider:
@@ -117,8 +117,8 @@ def test_websocket_connection_survives_provider_failure() -> None:
 
         provider = FailThenSucceedProvider()
 
-        agent = Agent(
-            provider=provider,
+        agent = create_test_agent(
+            provider,
         )
 
         server = WebSocketServer(
