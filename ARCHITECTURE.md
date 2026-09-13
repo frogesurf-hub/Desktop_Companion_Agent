@@ -62,6 +62,7 @@
 -   Speech Style
 -   Preferences
 -   Core Values
+-   Fictional Background（可选）
 
 原则：
 
@@ -225,11 +226,11 @@
 
 # 12. Event Bus
 
-所有模块通过事件交流。
+适合异步事实 / 通知传播的模块通过 EventBus 解耦。
 
-避免：
+Event 不等于 Command，也不代表 Permission。
 
-模块直接耦合。
+需要执行动作、同步请求或权限判断时，应保留显式边界，避免把所有交互强行塞进 EventBus。
 
 ------------------------------------------------------------------------
 
@@ -261,9 +262,9 @@
 
 ------------------------------------------------------------------------
 
-# 15. Phase 2 Implemented Baseline
+# 15. Phase 3 Implemented Baseline
 
-The sections above describe the long-term target architecture. As of the Phase 2 checkpoint (2026-09-12), the implemented runtime includes the original real-LLM MVP plus an explicit internal Event System.
+The sections above describe the long-term target architecture. As of the Phase 3 checkpoint (2026-09-13), the implemented runtime includes the real-LLM MVP, internal Event System, Character System, temporal runtime context, and prompt/context composition.
 
 ## 15.1 Current Desktop Runtime
 
@@ -289,7 +290,7 @@ Responsibilities remain:
 
 The independent receive loop remains an intentional architectural requirement for future proactive messages.
 
-Phase 2 made no C# source changes.
+Phases 2 and 3 made no C# source changes.
 
 ## 15.2 Current Python Runtime
 
@@ -297,6 +298,9 @@ Phase 2 made no C# source changes.
 main.py
   -> Settings
   -> Logging
+  -> Character loading / active selection
+  -> PromptContextComposer
+  -> SystemClock
   -> DeepSeekProvider
   -> EventBus
   -> Agent
@@ -306,10 +310,13 @@ main.py
 Composition-root lifetime:
 
 ```text
-create DeepSeekProvider
+load / resolve active Character
+  -> create PromptContextComposer
+  -> create SystemClock
+  -> create DeepSeekProvider
   -> establish Provider cleanup boundary
   -> create EventBus(queue_capacity from Settings)
-  -> create Agent(provider)
+  -> create Agent(provider, character, composer, clock)
   -> create WebSocketServer(agent)
   -> await EventBus.start()
   -> await WebSocketServer.run()
@@ -317,21 +324,114 @@ create DeepSeekProvider
   -> finally await Provider.aclose()
 ```
 
+Important startup rule:
+
+> Character loading occurs before Provider creation.
+
+This prevents a Character-definition startup failure from creating a Provider resource that then requires cleanup.
+
 Responsibilities:
 
 - `main.py`: Python composition root and runtime lifetime ownership
 - `Settings`: environment / `.env` runtime configuration
+- Character loader / resolver: external TOML -> validated `CharacterDefinition` and active selection
+- `PromptContextComposer`: prepared context -> provider-neutral `LLMRequest`
+- `Clock` / `SystemClock`: runtime current-time authority
+- `TemporalContext`: derived per-request local-time snapshot
 - `Logging`: console + rotating-file observability
 - `WebSocketServer`: connection lifecycle, protocol parsing, error isolation, response transport
 - `Message`: Python Desktop-protocol envelope
-- `Agent`: protocol-to-provider orchestration and safe Provider error mapping
+- `Agent`: protocol orchestration, temporal snapshot creation, context composition, Provider call, and safe Provider error mapping
 - `LLMProvider`: provider-neutral asynchronous Agent-facing contract
 - `DeepSeekProvider`: concrete DeepSeek / OpenAI-compatible adapter
 - `RuntimeEvent`: internal Event metadata foundation
 - `EventPublisher`: narrow publication capability
 - `EventBus`: internal asynchronous routing / dispatch / lifecycle service
 
-## 15.3 Provider Layer
+## 15.3 Character / Composition Boundary
+
+Implemented:
+
+```text
+CharacterDefinition
+Character TOML loader
+active Character resolution
+built-in Aria definition
+PromptContextComposer
+```
+
+Current Character domain:
+
+```text
+character_id
+display_name
+identity
+persona
+speech_style
+preferences?
+core_values?
+fictional_background?
+```
+
+Boundary rules:
+
+- Character definition is domain data.
+- TOML is external human-editable serialization.
+- Character does not own Memory.
+- Character does not own Internal State.
+- Character intent does not grant permission or tool authority.
+- Character fiction cannot override runtime truth.
+- active Character selection belongs to the composition root.
+- Composer consumes prepared context only.
+- Composer does not load Character, query Clock, query Memory, call Provider, publish Events, permission-check, or execute tools.
+- the original user message remains a separate `user` role message.
+- Character sections are descriptive application data, not Runtime Rules or a security boundary.
+
+Current composed system-context order:
+
+```text
+[Runtime Rules]
+[Temporal Context]
+[Character Data Boundary]
+[Character Identity]
+[Character Persona]
+[Speech Style]
+[Character Preferences]            optional
+[Character Core Values]            optional
+[Character Fictional Background]   optional
+```
+
+Default built-in Character:
+
+```text
+character_id: aria
+display_name: Aria
+```
+
+No approved fictional background is included for Aria in the Phase 3 baseline.
+
+## 15.4 Temporal Runtime Boundary
+
+Implemented:
+
+```text
+Clock
+SystemClock
+TemporalContext
+```
+
+Rules:
+
+- `Clock` is the sole runtime current-time authority.
+- `SystemClock` returns a timezone-aware local datetime.
+- `TemporalContext` is a derived per-request snapshot.
+- naive datetimes are rejected.
+- date, weekday, and UTC offset derive from the same snapshot.
+- Agent calls `Clock.now()` once per chat request.
+- Composer receives TemporalContext; it does not query Clock.
+- Scheduler is not implemented in Phase 3.
+
+## 15.5 Provider Layer
 
 ```text
 Agent
@@ -360,6 +460,7 @@ Boundary rules:
 - Desktop receives stable safe error codes/messages.
 - API keys are unwrapped only at provider construction.
 - external async Provider lifetime is owned by the composition root.
+- Character / Composer integration does not bypass Provider error isolation.
 
 Current Provider behavior:
 
@@ -372,7 +473,7 @@ zero automatic retries
 asyncio cancellation propagation
 ```
 
-## 15.4 Runtime Event Model
+## 15.6 Runtime Event Model
 
 Internal Runtime Events are facts / notifications that describe something that already happened.
 
@@ -404,9 +505,11 @@ Properties:
 
 Ordinary producers should depend on `EventPublisher`, not the concrete EventBus.
 
-## 15.5 EventBus
+Phase 3 does not add speculative Character Events.
 
-Phase 2 EventBus architecture:
+## 15.7 EventBus
+
+Current EventBus architecture:
 
 ```text
 Producer
@@ -440,11 +543,11 @@ Accepted semantics:
 - cancellation is not converted into an ordinary failure
 - graceful close drains accepted Events
 - explicit lifecycle: NEW -> RUNNING -> CLOSING -> CLOSED
-- no Event persistence / replay in Phase 2
+- no Event persistence / replay in the current baseline
 
 The EventBus is deliberately separate from the WebSocket Desktop transport. Internal Runtime Events do not automatically cross process boundaries.
 
-## 15.6 Event Observability
+## 15.8 Event Observability
 
 EventBus observability records safe metadata for diagnosis:
 
@@ -458,9 +561,9 @@ Default Event logging must not dump full Event payloads or subscriber/dispatcher
 
 This protects future Event payloads from becoming an accidental sensitive-data logging channel.
 
-## 15.7 Current Cross-Process Flow
+## 15.9 Current Cross-Process Flow
 
-The Phase 1 request/response path remains unchanged in role:
+The request/response path now includes Character composition and runtime temporal context:
 
 ```text
 WPF UI
@@ -470,6 +573,10 @@ WPF UI
   -> WebSocketServer
   -> Message.from_json()
   -> Agent.process_message()
+  -> Clock.now()
+  -> TemporalContext
+  -> active CharacterDefinition
+  -> PromptContextComposer
   -> LLMRequest
   -> LLMProvider.generate()
   -> DeepSeekProvider
@@ -482,9 +589,15 @@ WPF UI
   -> WPF UI
 ```
 
-Phase 2 final acceptance verified this real path still works for two consecutive WPF requests while EventBus is running.
+Phase 3 final acceptance verified:
 
-## 15.8 Provider Failure Flow
+- real WPF -> Python -> DeepSeek -> WPF operation
+- default Aria Character identity/style
+- runtime date / weekday grounding
+- mathematically correct factual reasoning
+- factual reality priority over Character fiction
+
+## 15.10 Provider Failure Flow
 
 ```text
 DeepSeek / SDK failure
@@ -497,13 +610,16 @@ DeepSeek / SDK failure
 
 The Provider boundary continues to prevent raw vendor diagnostics from becoming the Desktop contract.
 
-## 15.9 Event / Command / Permission Boundary
+Phase 3 real regression acceptance also rechecked authentication failure and log-safety behavior after Character integration.
 
-Persistent rule:
+## 15.11 Event / Command / Permission Boundary
+
+Persistent rules:
 
 ```text
 Event != Command
 Intent != Permission
+Real State != Fictional State
 ```
 
 An Event communicates a fact or notification.
@@ -512,14 +628,15 @@ A future command/request boundary must remain explicit when the system wants som
 
 A future permission boundary must separately decide whether an intended sensitive action is allowed.
 
-Do not infer authorization from Event source, Event existence, character intent, or Behavior output.
+Do not infer authorization from Event source, Event existence, Character intent, or future Behavior output.
 
-## 15.10 Still Not Implemented
+Prompt/context composition is semantic model guidance and is not a permission or security boundary.
 
-The following target-architecture modules remain design-level or future-phase work:
+## 15.12 Still Not Implemented
 
-- Character Core
-- Memory System
+The following target-architecture modules or capabilities remain design-level or future-phase work:
+
+- Memory System / User Profile persistence
 - Internal State business logic
 - Perception Layer
 - Situation Engine
@@ -531,6 +648,14 @@ The following target-architecture modules remain design-level or future-phase wo
 - local-model routing / cloud fallback
 - voice
 - Desktop Event Bridge
+- dynamic Character switching UI
+- Character hot reload
+- Character Catalog service
+- Character Event model
+- Character-specific tool authority
+- Scheduler
+- fictional background for Aria
+- Markdown / LaTeX rich rendering in WPF
 
 The Event System also deliberately omits:
 
@@ -544,24 +669,20 @@ The Event System also deliberately omits:
 
 Do not infer implementation merely because a module exists in the target diagram.
 
-## 15.11 Boundary Rule
+## 15.13 Boundary Rule
 
-Future phases should extend the verified Phase 0-2 runtime without collapsing layers.
+Future phases should extend the verified Phase 0-3 runtime without collapsing layers.
 
 In particular:
 
-- UI must not own Agent reasoning, Provider, Memory, Tool, or EventBus lifecycle logic
-
-- WebSocket transport must not own Agent / Provider / EventBus construction
-
+- UI must not own Agent reasoning, Provider, Memory, Tool, Character loading, or EventBus lifecycle logic
+- WebSocket transport must not own Agent / Provider / Character / EventBus construction
 - provider-specific code must not become the Agent Core public API
-
+- Character must not own Memory or Internal State
+- PromptContextComposer must consume prepared context rather than becoming a service locator
+- Clock remains the sole source of runtime current-time truth
 - ordinary Event producers should receive narrow publisher capability where possible
-
 - Runtime Events should remain facts; commands remain explicit
-
 - proactive behavior should use Event -> Situation -> Attention -> Behavior flow rather than UI polling
-
 - sensitive actions must pass through Permission Layer
-
 - real and fictional state must remain separate

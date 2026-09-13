@@ -1,8 +1,8 @@
 # Desktop Companion Agent Roadmap
 
-> Re-baselined after the Phase 2 checkpoint on 2026-09-12.
+> Re-baselined after the Phase 3 checkpoint on 2026-09-13.
 >
-> Phase 0 established the Desktop/WebSocket cross-language foundation. Phase 1 completed the original AI MVP with a provider-neutral DeepSeek path. Phase 2 established the runtime Event System. Phase 3 is now the active next phase.
+> Phase 0 established the Desktop/WebSocket cross-language foundation. Phase 1 completed the original AI MVP with a provider-neutral DeepSeek path. Phase 2 established the runtime Event System. Phase 3 completed the Character System, temporal runtime context, and prompt/context composition. Phase 4 - Memory System is now the active next phase.
 
 ## Phase 0 - Engineering Foundation and Cross-Language Vertical Slice
 
@@ -145,29 +145,82 @@ See:
 
 ## Phase 3 - Character System
 
-Status: **Next**
+Status: **Complete**
 
-Goal:
+Goal achieved:
 
-Define stable character and user-context boundaries on top of the verified Provider/WebSocket/EventBus runtime.
+Define stable Character and user-context boundaries on top of the verified Provider/WebSocket/EventBus runtime, and integrate Character identity plus runtime temporal truth into the real LLM request path.
 
-Planned:
+Completed:
 
-- Identity
-- Persona
-- Speech Style
-- Preferences
-- Core Values
-- User Profile boundary
-- Prompt / context composition interfaces
+- [x] structured `CharacterDefinition` domain
+- [x] human-editable TOML Character definitions
+- [x] built-in default Character `Aria`
+- [x] package-data inclusion for built-in Character definitions
+- [x] explicit Character-system error hierarchy
+- [x] duplicate / missing Character resolution checks
+- [x] configurable external Character definition directory
+- [x] configurable active Character ID
+- [x] multi-character runtime selection boundary without speculative `CharacterCatalog`
+- [x] explicit Character / Memory ownership boundary
+- [x] runtime `Clock` abstraction
+- [x] local timezone-aware `SystemClock`
+- [x] derived per-request `TemporalContext`
+- [x] provider-neutral `PromptContextComposer`
+- [x] explicit Character-data provenance boundary in composed context
+- [x] factual runtime truth prioritized over Character fiction
+- [x] Agent integration with Character / Composer / Clock
+- [x] preservation of Provider error mapping
+- [x] preservation of WebSocket and EventBus lifecycle boundaries
+- [x] startup ordering that loads Character before Provider creation
+- [x] deterministic shared test fixtures for Phase 3 Agent construction
+- [x] real WPF -> Python -> DeepSeek -> WPF Character acceptance
+- [x] runtime date / weekday acceptance
+- [x] real factual-correctness acceptance
+- [x] Provider authentication-failure / log-safety regression
+- [x] final full Python quality gate
 
-Principle:
+Final Python acceptance:
 
-Character personality cannot override truth, permission, security, or factual-state boundaries.
+```text
+145 pytest tests passed
+Ruff passed
+mypy passed on 51 source files
+```
+
+Manual acceptance:
+
+- default Character identified herself as `Aria`
+- ordinary conversation showed Character style
+- `sqrt(2)` irrationality proof remained mathematically correct
+- runtime date returned `2026-09-13`, Sunday
+- factual reality was preferred over conflicting Character settings
+- real DeepSeek-backed responses returned through WPF
+
+Not included by design:
+
+- Memory / User Profile persistence
+- Internal State / Mood
+- Scheduler
+- dynamic Character switching UI
+- Character hot reload
+- Character Event model
+- Permission / Tool business logic
+- Perception / Situation / Attention / Behavior
+- Avatar / Voice
+- fictional background for Aria
+- Markdown / LaTeX rich rendering in WPF
+
+See:
+
+- `docs/PHASE_3_CHECKPOINT.md`
+- ADR 0013 / 0014 / 0015
 
 ---
 
 ## Phase 4 - Memory System
+
+Status: **Next**
 
 Goal:
 

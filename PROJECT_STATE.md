@@ -1,8 +1,8 @@
 # Desktop Companion Agent - Project State
 
-> Context checkpoint: Phase 2 completed on 2026-09-12.
+> Context checkpoint: Phase 3 completed on 2026-09-13.
 >
-> This file is the primary context-recovery document for future development sessions. If chat context is lost, read this file first, then `docs/PHASE_2_CHECKPOINT.md`, `ARCHITECTURE.md`, `ROADMAP.md`, and the relevant subsystem design / ADR documents.
+> This file is the primary context-recovery document for future development sessions. If chat context is lost, read this file first, then `docs/PHASE_3_CHECKPOINT.md`, `ARCHITECTURE.md`, `ROADMAP.md`, and the relevant subsystem design / ADR documents.
 
 ## 1. Current Status
 
@@ -11,17 +11,18 @@ Current phase status:
 - Phase 0 - Engineering Foundation / Cross-Language Vertical Slice: **Complete**
 - Phase 1 - LLM Provider / Original AI MVP: **Complete**
 - Phase 2 - Event System: **Complete**
-- Next roadmap phase: **Phase 3 - Character System**
+- Phase 3 - Character System: **Complete**
+- Next roadmap phase: **Phase 4 - Memory System**
 
-Current implementation baseline before the Phase 2 final-documentation commit:
+Current implementation baseline before the Phase 3 final-documentation commit:
 
 ```text
-ccee378 Integrate event bus into runtime composition
+a172a43 Update Agent integration test fixtures
 ```
 
-Phase 2 added a provider-independent, business-domain-neutral runtime Event System without replacing or rewriting the working Phase 1 chat path.
+Phase 3 added a structured Character System, runtime temporal context, and provider-neutral prompt/context composition without replacing the verified Provider/WebSocket/EventBus runtime.
 
-The verified real vertical slice remains:
+The verified real vertical slice is now:
 
 ```text
 WPF UI
@@ -34,6 +35,11 @@ WPF UI
   -> Python WebSocketServer
   -> Message
   -> Agent.process_message()
+  -> Clock.now()
+  -> TemporalContext
+  -> active CharacterDefinition
+  -> PromptContextComposer
+  -> LLMRequest
   -> LLMProvider
   -> DeepSeekProvider
   -> DeepSeek API
@@ -42,33 +48,36 @@ WPF UI
   -> WPF UI
 ```
 
-Alongside that request/response path, the Python runtime now owns an in-process EventBus foundation for future proactive modules.
+Alongside that request/response path, the Python runtime continues to own the in-process EventBus foundation introduced in Phase 2.
 
-## 2. What Phase 2 Proved
+## 2. What Phase 3 Proved
 
-Phase 2 proved that the runtime can introduce an explicit asynchronous Event boundary without breaking the Phase 1 Provider/WebSocket vertical slice.
+Phase 3 proved that stable Character identity and runtime temporal truth can participate in the real LLM request path without collapsing Provider, Event, factual-state, or future Memory boundaries.
 
 Verified properties:
 
-- Runtime Events are immutable facts / notifications, not commands, permission grants, requests, or return-value carriers.
-- Runtime Event metadata has a stable base contract.
-- Event producers can depend on a narrow `EventPublisher` capability instead of owning EventBus lifecycle or subscription management.
-- the concrete EventBus is asynchronous and in-process.
-- subscriptions use exact Event types under the Phase 2 baseline.
-- publication acceptance is bounded and explicit.
-- queue overload fails fast with `EventBusFullError`; Phase 2 does not wait indefinitely for queue space.
-- queue admission order determines Event dispatch order.
-- subscribers for one Event may execute concurrently.
-- the next Event does not begin dispatch until the current Event's subscribers settle.
-- ordinary subscriber exceptions are isolated and do not stop sibling handlers or later Events.
-- cancellation remains asyncio control flow and is not treated as an ordinary subscriber failure.
-- EventBus lifecycle and graceful drain behavior are explicit and tested.
-- EventBus observability records safe metadata without logging full Event payloads by default.
-- EventBus runtime ownership belongs to the Python composition root.
-- Provider cleanup remains protected when EventBus construction/start/close or server execution fails.
-- the real WPF -> Python -> DeepSeek -> Python -> WPF path still works after EventBus integration.
+- Character definition is explicit domain data rather than an ad-hoc prompt blob.
+- TOML is a human-editable external serialization format, not the Character domain model.
+- the default built-in Character is `Aria`.
+- runtime Character selection belongs to the composition root.
+- external Character definition directories and active Character IDs are configurable.
+- Character does not own Memory.
+- Character does not own Internal State.
+- Character intent does not grant permission or tool authority.
+- Character fiction does not override mathematics, science, runtime facts, user facts, or tool results.
+- `Clock` is the sole runtime source of current date/time truth.
+- `TemporalContext` is a derived per-request snapshot.
+- `PromptContextComposer` consumes prepared context and produces a provider-neutral `LLMRequest`.
+- Composer does not load Character, query Clock, query Memory, call Provider, publish Events, permission-check, or execute tools.
+- Agent receives Character / Composer / Clock through explicit dependency injection.
+- Provider error mapping remains unchanged.
+- unsupported Desktop messages are still rejected before Provider execution.
+- Character loading failure does not create Provider or EventBus resources.
+- the real WPF -> Python -> DeepSeek -> Python -> WPF path works with Character and Temporal Context active.
+- manual runtime acceptance confirmed Aria identity/style, mathematically correct `sqrt(2)` reasoning, correct runtime date/weekday, and factual-reality priority over Character fiction.
+- deliberate Provider authentication failure and sensitive-log review remained safe after Character integration.
 
-Phase 2 deliberately did **not** implement Character, Memory, Perception, Situation, Attention, Behavior, Permission, Tools, Voice, Avatar, or a Desktop Event Bridge.
+Phase 3 deliberately did **not** implement Memory persistence, User Profile learning, Internal State, Scheduler, Perception, Situation, Attention, Behavior, Permission, Tools, Voice, Avatar, dynamic Character switching UI, Character hot reload, or a Desktop Event Bridge.
 
 ## 3. Current Implemented Architecture
 
@@ -86,10 +95,13 @@ Current composition:
 main.py
   -> get_settings()
   -> setup_logging()
+  -> load / resolve active Character
+  -> create PromptContextComposer
+  -> create SystemClock
   -> create DeepSeekProvider
   -> establish Provider cleanup boundary
   -> create EventBus(queue_capacity=Settings)
-  -> create Agent(provider)
+  -> create Agent(provider, character, composer, clock)
   -> create WebSocketServer(agent)
   -> await EventBus.start()
   -> await WebSocketServer.run()
@@ -101,8 +113,16 @@ Implemented modules now include:
 
 ```text
 src/agent_core/
+├── characters/
+│   ├── definitions/
+│   │   └── aria.toml
+│   ├── errors.py
+│   ├── loader.py
+│   └── models.py
 ├── communication/
 │   └── websocket_server.py
+├── composition/
+│   └── composer.py
 ├── config/
 │   └── settings.py
 ├── core/
@@ -121,6 +141,9 @@ src/agent_core/
 │   ├── base.py
 │   ├── deepseek.py
 │   ├── errors.py
+│   └── models.py
+├── temporal/
+│   ├── clock.py
 │   └── models.py
 ├── tests/
 └── main.py
@@ -148,7 +171,16 @@ Implemented behavior includes:
 - explicit EventBus lifecycle / graceful drain
 - subscriber concurrency + ordinary failure isolation
 - safe Event lifecycle observability
-- composition-root ownership of EventBus and Provider lifetimes
+- structured `CharacterDefinition` domain
+- human-editable TOML Character definitions
+- built-in default Character `Aria`
+- runtime active-Character selection through Settings
+- explicit `Clock` / `SystemClock` temporal authority
+- derived per-request `TemporalContext`
+- provider-neutral `PromptContextComposer`
+- runtime rules that preserve factual truth over Character fiction
+- explicit Agent injection of Character / Composer / Clock
+- composition-root ownership of Character selection, EventBus, and Provider lifetimes
 
 ### 3.2 Current DeepSeek Baseline
 
@@ -216,7 +248,7 @@ LLMProviderError
 └── ProviderResponseError
 ```
 
-Phase 1/2 runtime performs zero automatic Provider retries.
+Phase 1-3 runtime performs zero automatic Provider retries.
 
 ### 3.4 Event Contract
 
@@ -344,7 +376,7 @@ AgentMessage                Protocol model
 
 The independent Desktop receive loop remains an intentional long-term capability for future proactive messages.
 
-Phase 2 did not modify C# source.
+Phases 2 and 3 did not modify C# source.
 
 ## 4. Current Protocol
 
@@ -386,6 +418,8 @@ DCA_RUNTIME_MODE
 DCA_WEBSOCKET_HOST
 DCA_WEBSOCKET_PORT
 DCA_EVENT_BUS_QUEUE_CAPACITY
+DCA_CHARACTER_DEFINITIONS_DIR
+DCA_ACTIVE_CHARACTER_ID
 DCA_MODEL_PROVIDER
 DCA_DEEPSEEK_API_KEY
 DCA_DEEPSEEK_MODEL
@@ -408,7 +442,7 @@ Important:
 - API keys remain local secrets
 - `pyproject.toml` is the canonical Python dependency source
 - `src/agent_core/requirements.txt` remains legacy duplicate metadata and must not receive new dependencies
-- Phase 2 added no third-party dependency
+- Phases 2 and 3 added no third-party dependency
 
 ## 6. Validation Baseline
 
@@ -459,6 +493,43 @@ Known existing shutdown debt observed during manual acceptance:
 
 - closing WPF may produce `websockets.exceptions.ConnectionClosedError: no close frame received or sent` on the Python server side.
 - this is an existing Desktop/WebSocket shutdown-hardening issue and is not an EventBus shutdown failure.
+
+### Phase 3 checkpoint
+
+Phase 3 final project-owner acceptance on 2026-09-13:
+
+```text
+python -m pytest -q
+-> 145 passed in 4.99s
+
+python -m ruff check .
+-> All checks passed!
+
+python -m mypy src
+-> Success: no issues found in 51 source files
+
+git diff --check
+-> clean
+```
+
+C# build:
+
+```text
+N/A for Phase 3 final acceptance because Phase 3 changed no C# source.
+```
+
+Manual runtime acceptance:
+
+- Python Agent Core started successfully.
+- WPF connected successfully.
+- default Character identified herself as `Aria`.
+- ordinary conversation showed visible Character style without blocking task-oriented use.
+- a real `sqrt(2)` irrationality proof remained mathematically correct.
+- runtime temporal context produced `2026-09-13`, Sunday.
+- the model explicitly preferred verifiable mathematical / scientific reality over conflicting Character settings.
+- real DeepSeek-backed responses returned through WPF.
+- deliberate Provider authentication failure still mapped to the existing safe protocol error boundary.
+- runtime log review did not reveal API keys, Authorization headers, complete user/system prompts, complete model responses, raw response bodies, or reasoning content.
 
 ## 7. Development Baseline
 
@@ -525,7 +596,7 @@ External World
   -> Voice / Avatar / Tools
 ```
 
-Phase 2 implements only the Event infrastructure layer from this flow.
+Phase 2 implemented the Event infrastructure layer. Phase 3 added Character, temporal truth, and prompt/context composition. Situation, Attention, Behavior, Perception, Permission, Tools, Voice, and Avatar remain future work.
 
 ### 8.3 Intent != Permission
 
@@ -591,18 +662,26 @@ Phase 2 ADRs:
 
 ADR 0012 supersedes only the queue-full waiting/backpressure portion of ADR 0011. Other accepted ADR 0011 decisions remain in force.
 
-## 10. Phase 2 Git Anchors
+Phase 3 ADRs:
+
+```text
+0013 Character definitions are structured domain data
+0014 Character consumes User Context; Memory owns User Profile
+0015 Runtime temporal truth comes from Clock context
+```
+
+## 10. Phase 3 Git Anchors
 
 Confirmed development anchors:
 
 ```text
-c0ace0d Design Phase 2 event system
-31734de Establish Phase 2 runtime event contracts
-242ed9e Correct Phase 2 event bus overload architecture
-55c8624 Implement Phase 2 event bus core
-ad23a10 Add event bus lifecycle and failure isolation
-5b161c1 Add event lifecycle observability
-ccee378 Integrate event bus into runtime composition
+ecc1fce Record Phase 3 character architecture decisions
+e648a19 Establish Phase 3 character domain models
+21e658f Add Character definition loading
+39f8537 Add runtime temporal context
+cb1c5b0 Add Character context composition
+5ecee74 Integrate Character context into runtime
+a172a43 Update Agent integration test fixtures
 ```
 
 The repository `git log --oneline` remains authoritative for complete history.
@@ -620,46 +699,63 @@ The repository `git log --oneline` remains authoritative for complete history.
 9. automatic Provider retries remain intentionally unsupported.
 10. local-model / cloud-fallback routing is not implemented.
 11. WPF displays Provider error messages but does not yet implement code-specific UI behavior.
-12. prompt/persona composition, Memory, Tools, Perception, Situation, Attention, Behavior, Avatar, and Voice remain future work.
-13. Runtime Events are internal only; there is no Desktop Event Bridge yet.
-14. Event persistence, replay, priority, wildcard routing, dynamic unsubscribe, multiple dispatcher workers, and restart/supervision policy are intentionally absent from the Phase 2 baseline.
-15. The repository does not yet enforce a canonical text EOL policy through a dedicated `.gitattributes`; keep `git diff --check` in the review workflow.
-16. Generated caches, logs, local `.env`, build outputs, and `.git` must remain excluded from checkpoint/source archives.
+12. WPF still renders Markdown / LaTeX syntax as plain text.
+13. dynamic Character switching UI is not implemented.
+14. Character hot reload is not implemented.
+15. Memory / User Profile persistence remains future work.
+16. Runtime Events are internal only; there is no Desktop Event Bridge yet.
+17. Event persistence, replay, priority, wildcard routing, dynamic unsubscribe, multiple dispatcher workers, and restart/supervision policy remain intentionally absent from the current Event baseline.
+18. The repository does not yet enforce a canonical text EOL policy through a dedicated `.gitattributes`; keep `git diff --check` in the review workflow.
+19. Generated caches, logs, local `.env`, build outputs, and `.git` must remain excluded from checkpoint/source archives.
 
-## 12. Phase 3 Entry Point
+## 12. Phase 4 Entry Point
 
 Next roadmap phase:
 
-> Phase 3 - Character System
+> Phase 4 - Memory System
 
 Goal:
 
-Define stable character and user-context boundaries on top of the Phase 0-2 runtime foundation.
+Introduce explicit Memory ownership and separated memory domains without allowing temporary, fictional, or low-confidence state to contaminate factual user context.
 
-Expected roadmap scope:
+Expected scope:
 
-- Identity
-- Persona
-- Speech Style
-- Preferences
-- Core Values
-- User Profile boundary
-- prompt / context composition interfaces
+- User Profile
+- Working Context
+- Episodic Memory
+- Long-term Memory
+- Relationship Memory
+- Today Memory
+- Fictional Ephemeral State
+- retrieval / persistence / retention / conflict rules
+
+Phase 4 must preserve:
+
+```text
+Character != Memory
+Character != Internal State
+TemporalContext != Memory
+Prompt composition != Permission
+Intent != Permission
+Real State != Fictional State
+```
+
+Character and `PromptContextComposer` should consume prepared memory/user context rather than owning Memory persistence, retrieval, learning, retention, or conflict behavior.
 
 Before implementation:
 
-- recover context from the Phase 2 checkpoint and current code
-- preserve the verified Provider/WebSocket/EventBus runtime
-- design Character System contracts before implementation
-- do not allow personality to override truth, permission, security, or factual-state boundaries
-- do not pull Memory, Perception, Situation, Attention, Behavior, Permission, Tools, Voice, or Avatar implementation into Phase 3 unless a minimal contract boundary is strictly required
+- recover context from the Phase 3 checkpoint and current code
+- preserve the verified Provider/WebSocket/EventBus/Character runtime
+- design Memory ownership and retrieval contracts before implementation
+- do not redesign Character merely to make Memory convenient
+- do not allow fictional or ephemeral state to enter factual user-profile storage
 
 ## 13. Context Recovery Procedure
 
 When continuing this project in a new conversation/session:
 
 1. read `PROJECT_STATE.md`
-2. read `docs/PHASE_2_CHECKPOINT.md`
+2. read `docs/PHASE_3_CHECKPOINT.md`
 3. read `ARCHITECTURE.md`
 4. read `ROADMAP.md`
 5. read `DESIGN.md`
