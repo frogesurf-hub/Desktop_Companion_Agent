@@ -1,3 +1,11 @@
+from agent_core.memory.governance import (
+    MemoryDeletedError,
+    MemoryGovernanceEntry,
+    MemoryGovernanceError,
+    MemoryGovernanceService,
+    MemoryNotFoundError,
+    MemoryStateError,
+)
 from agent_core.memory.models import (
     Memory,
     MemoryDomain,
@@ -18,5 +26,11 @@ __all__ = [
     "MemoryScope",
     "MemoryScopeKind",
     "MemorySource",
+    "MemoryDeletedError",
+    "MemoryGovernanceEntry",
+    "MemoryGovernanceError",
+    "MemoryGovernanceService",
+    "MemoryNotFoundError",
+    "MemoryStateError",
 
 ]
