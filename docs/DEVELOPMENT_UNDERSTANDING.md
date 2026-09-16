@@ -1051,3 +1051,67 @@ Phase Scope
 ```
 
 理解机制用于帮助项目 owner 跟上开发，不得为了“更容易解释”而牺牲正确的工程设计。
+
+## Source Checkpoint / 源码快照约定
+
+为了保证长期开发、跨话题开发和上下文恢复时能够获得可靠的完整代码基线，
+项目在重要开发里程碑建立 Source Checkpoint。
+
+Source Checkpoint 以当前项目完整源码 ZIP 为主体。
+必要时同时保存 Git Context 文本，用于记录当前 branch、HEAD、working tree 状态和近期提交历史。
+
+### 需要建立 Checkpoint 的情况
+
+以下情况默认建立新的 Source Checkpoint：
+
+1. 一个具有明显结构性变化的 Task 完成并提交后，例如：
+   - 新增新的核心子系统；
+   - 新增或修改 Persistence / Protocol / Provider / Character / Memory 等架构层；
+   - 新增较多源码文件或跨多个模块的大规模修改；
+   - 新增重要 ADR、Migration 或基础设施。
+
+2. 即将进入新的 Project Conversation / Phase / 大型开发阶段之前。
+
+3. 当前完整源码与上一个 Source Checkpoint 已产生较大结构差异，且后续开发需要以新结构为基础时。
+
+4. 每个 Phase 最终验收并提交完成后。
+
+### 不需要建立 Checkpoint 的情况
+
+以下情况通常不单独上传 ZIP：
+
+- 小型 bug 修复；
+- 少量测试补充；
+- 单文件小范围修改；
+- formatting / lint / typo 修复；
+- 尚未完成或尚未 commit 的中间开发状态。
+
+除非这些修改本身成为后续开发的重要恢复基线。
+
+### Checkpoint 内容
+
+源码快照建议命名：
+
+`Desktop_Companion_Agent_phaseX_taskY_checkpoint.zip`
+
+重要结构性 Checkpoint 可额外保存：
+
+`PHASE_X_TASKY_GIT_CONTEXT.txt`
+
+Git Context 至少包含：
+
+- 当前 branch；
+- 当前 HEAD commit；
+- working tree 状态；
+- 最近的 commit history。
+
+完整 `.git` 目录不需要放入源码 ZIP。
+
+### 协作责任
+
+项目 owner 负责实际打包并上传 Source Checkpoint。
+
+AI assistant 在判断当前开发已经达到需要建立 Checkpoint 的里程碑时，
+应主动提醒项目 owner 上传最新 ZIP，并明确说明是否同时需要 Git Context。
+
+Checkpoint 不是每个 Task 的机械步骤，而是由结构变化和上下文恢复价值决定。
