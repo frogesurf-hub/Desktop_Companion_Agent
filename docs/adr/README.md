@@ -36,3 +36,10 @@ Phase 3 ADRs:
 - `0013-character-definitions-are-structured-domain-data.md`
 - `0014-character-consumes-user-context-memory-owns-user-profile.md`
 - `0015-runtime-temporal-truth-comes-from-clock-context.md`
+
+Phase 4 ADRs:
+
+- `0016-factual-memory-domains-scopes-lifecycle-and-revisions.md`
+- `0017-sqlite-default-durable-memory-source-of-truth.md`
+- `0018-memory-explicit-failure-isolated-boundaries.md`
+- `0019-adaptive-runtime-behavior-decision-and-capability-boundaries.md`
