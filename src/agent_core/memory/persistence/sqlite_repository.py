@@ -1,6 +1,6 @@
 from uuid import UUID
 
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.ext.asyncio import (
     AsyncSession,
     async_sessionmaker,
@@ -294,6 +294,50 @@ class SQLiteMemoryRepository:
                     )
                 )
 
+    async def expire_active_revision(
+        self,
+        memory_id: UUID,
+        expected_revision_number: int,
+    ) -> None:
+        """
+        原子地将预期的当前 ACTIVE Revision 标记为 EXPIRED。
+        """
+
+        async with self._session_factory() as session:
+            async with session.begin():
+                expire_statement = (
+                    update(MemoryRevisionRow)
+                    .where(
+                        MemoryRevisionRow.memory_id
+                        == str(memory_id),
+                        MemoryRevisionRow.revision_number
+                        == expected_revision_number,
+                        MemoryRevisionRow.lifecycle
+                        == MemoryLifecycle.ACTIVE.value,
+                    )
+                    .values(
+                        lifecycle=(
+                            MemoryLifecycle.EXPIRED.value
+                        )
+                    )
+                    .returning(
+                        MemoryRevisionRow.row_id
+                    )
+                )
+
+                result = await session.execute(
+                    expire_statement
+                )
+
+                updated_row_id = (
+                    result.scalar_one_or_none()
+                )
+
+                if updated_row_id is None:
+                    raise ValueError(
+                        "Expected ACTIVE revision "
+                        "does not exist"
+                    )
     async def delete_memory(
         self,
         memory_id: UUID,

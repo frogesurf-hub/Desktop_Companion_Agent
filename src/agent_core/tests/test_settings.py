@@ -6,6 +6,7 @@ from pydantic import ValidationError
 from agent_core.config import Settings
 
 DCA_ENVIRONMENT_VARIABLES = [
+    "DCA_WORKING_CONTEXT_RETENTION_DAYS",
     "DCA_CHARACTER_DEFINITIONS_DIR",
     "DCA_ACTIVE_CHARACTER_ID",
     "DCA_APP_NAME",
@@ -83,6 +84,8 @@ def test_settings_default_values(
 
     assert settings.active_character_id == "aria"
 
+    assert settings.working_context_retention_days == 7
+
 
 def test_environment_variables_override_defaults(
     monkeypatch: pytest.MonkeyPatch,
@@ -150,6 +153,11 @@ def test_environment_variables_override_defaults(
         "custom",
     )
 
+    monkeypatch.setenv(
+        "DCA_WORKING_CONTEXT_RETENTION_DAYS",
+        "14",
+    )
+
     settings = Settings()
 
     assert settings.runtime_mode == "local"
@@ -172,6 +180,8 @@ def test_environment_variables_override_defaults(
     )
 
     assert settings.active_character_id == "custom"
+
+    assert settings.working_context_retention_days == 14
 
 
 def test_invalid_runtime_mode_is_rejected(
@@ -290,3 +300,34 @@ def test_deepseek_api_key_is_stored_as_secret(
     assert str(
         settings.deepseek_api_key,
     ) != api_key
+
+
+@pytest.mark.parametrize(
+    "retention_days",
+    [
+        "0",
+        "31",
+    ],
+)
+def test_invalid_working_context_retention_is_rejected(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    retention_days: str,
+) -> None:
+    clear_dca_environment(
+        monkeypatch,
+    )
+
+    monkeypatch.chdir(
+        tmp_path,
+    )
+
+    monkeypatch.setenv(
+        "DCA_WORKING_CONTEXT_RETENTION_DAYS",
+        retention_days,
+    )
+
+    with pytest.raises(
+        ValidationError,
+    ):
+        Settings()

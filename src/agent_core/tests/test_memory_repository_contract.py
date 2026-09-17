@@ -82,6 +82,13 @@ class ContractProbeMemoryRepository:
     ) -> None:
         return None
 
+    async def expire_active_revision(
+        self,
+        memory_id: UUID,
+        expected_revision_number: int,
+    ) -> None:
+        pass
+
 
 def _as_memory_repository(
     repository: MemoryRepository,

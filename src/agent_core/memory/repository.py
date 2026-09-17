@@ -85,6 +85,20 @@ class MemoryRepository(Protocol):
 
         ...
 
+    async def expire_active_revision(
+        self,
+        memory_id: UUID,
+        expected_revision_number: int,
+    ) -> None:
+        """
+        原子地将指定的当前 ACTIVE Revision 标记为 EXPIRED。
+
+        只有当前 ACTIVE Revision 的 revision_number
+        与 expected_revision_number 一致时才执行。
+        """
+
+        ...
+
     async def delete_memory(
         self,
         memory_id: UUID,

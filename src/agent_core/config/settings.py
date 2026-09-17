@@ -49,6 +49,12 @@ class Settings(BaseSettings):
         default=256,
         gt=0,
     )
+    working_context_retention_days: int = Field(
+        default=7,
+        ge=1,
+        le=30,
+    )
+
     character_definitions_dir: Path | None = None
 
     active_character_id: str = "aria"

@@ -181,6 +181,214 @@ async def _exercise_round_trip(
         await engine.dispose()
 
 
+async def _exercise_expire_active_revision(
+    database_path: Path,
+) -> None:
+    engine, repository = (
+        await _build_repository(
+            database_path
+        )
+    )
+
+    try:
+        memory = Memory(
+            memory_id=_MEMORY_ID,
+            domain=MemoryDomain.WORKING_CONTEXT,
+            scope=MemoryScope(
+                kind=MemoryScopeKind.GLOBAL_USER,
+            ),
+        )
+
+        active_revision = MemoryRevision(
+            memory_id=_MEMORY_ID,
+            revision_number=1,
+            content="Temporary working context.",
+            source=MemorySource.USER_EXPLICIT,
+            lifecycle=MemoryLifecycle.ACTIVE,
+            recorded_at=datetime.now(UTC),
+        )
+
+        await repository.create_memory(
+            memory,
+            active_revision,
+        )
+
+        await repository.expire_active_revision(
+            _MEMORY_ID,
+            active_revision.revision_number,
+        )
+
+        loaded_active = (
+            await repository.get_active_revision(
+                _MEMORY_ID
+            )
+        )
+
+        revisions = (
+            await repository.list_revisions(
+                _MEMORY_ID
+            )
+        )
+
+        assert loaded_active is None
+
+        assert len(revisions) == 1
+
+        expired_revision = revisions[0]
+
+        assert (
+            expired_revision.memory_id
+            == active_revision.memory_id
+        )
+        assert (
+            expired_revision.revision_number
+            == active_revision.revision_number
+        )
+        assert (
+            expired_revision.content
+            == active_revision.content
+        )
+        assert (
+            expired_revision.source
+            is active_revision.source
+        )
+        assert (
+            expired_revision.recorded_at
+            == active_revision.recorded_at
+        )
+        assert (
+            expired_revision.occurred_at
+            == active_revision.occurred_at
+        )
+        assert (
+            expired_revision.lifecycle
+            is MemoryLifecycle.EXPIRED
+        )
+
+    finally:
+        await engine.dispose()
+
+
+async def _exercise_expire_without_active_revision(
+    database_path: Path,
+) -> None:
+    engine, repository = (
+        await _build_repository(
+            database_path
+        )
+    )
+
+    try:
+        with pytest.raises(
+            ValueError,
+            match="Expected ACTIVE revision does not exist",
+        ):
+            await repository.expire_active_revision(
+                _MEMORY_ID,
+                1,
+            )
+
+    finally:
+        await engine.dispose()
+
+
+async def _exercise_rejects_stale_expiration(
+    database_path: Path,
+) -> None:
+    engine, repository = (
+        await _build_repository(
+            database_path
+        )
+    )
+
+    try:
+        memory = Memory(
+            memory_id=_MEMORY_ID,
+            domain=MemoryDomain.WORKING_CONTEXT,
+            scope=MemoryScope(
+                kind=MemoryScopeKind.GLOBAL_USER,
+            ),
+        )
+
+        first_revision = MemoryRevision(
+            memory_id=_MEMORY_ID,
+            revision_number=1,
+            content="Old working context.",
+            source=MemorySource.USER_EXPLICIT,
+            lifecycle=MemoryLifecycle.ACTIVE,
+            recorded_at=datetime.now(UTC),
+        )
+
+        second_revision = MemoryRevision(
+            memory_id=_MEMORY_ID,
+            revision_number=2,
+            content="New working context.",
+            source=MemorySource.USER_EDIT,
+            lifecycle=MemoryLifecycle.ACTIVE,
+            recorded_at=datetime.now(UTC),
+        )
+
+        await repository.create_memory(
+            memory,
+            first_revision,
+        )
+
+        await repository.replace_active_revision(
+            _MEMORY_ID,
+            second_revision,
+        )
+
+        with pytest.raises(
+            ValueError,
+            match="Expected ACTIVE revision does not exist",
+        ):
+            await repository.expire_active_revision(
+                _MEMORY_ID,
+                1,
+            )
+
+        active_revision = (
+            await repository.get_active_revision(
+                _MEMORY_ID
+            )
+        )
+
+        assert active_revision == second_revision
+
+    finally:
+        await engine.dispose()
+
+
+def test_sqlite_repository_rejects_stale_expiration(
+    tmp_path: Path,
+) -> None:
+    asyncio.run(
+        _exercise_rejects_stale_expiration(
+            tmp_path / "memory.db"
+        )
+    )
+
+
+def test_sqlite_repository_rejects_expire_without_active_revision(
+    tmp_path: Path,
+) -> None:
+    asyncio.run(
+        _exercise_expire_without_active_revision(
+            tmp_path / "memory.db"
+        )
+    )
+
+
+def test_sqlite_repository_expires_active_revision(
+    tmp_path: Path,
+) -> None:
+    asyncio.run(
+        _exercise_expire_active_revision(
+            tmp_path / "memory.db"
+        )
+    )
+
+
 def test_sqlite_repository_round_trips_memory(
     tmp_path: Path,
 ) -> None:

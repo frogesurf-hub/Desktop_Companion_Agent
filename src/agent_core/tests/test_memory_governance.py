@@ -143,6 +143,15 @@ class ReadProbeMemoryRepository:
             "Read Governance must not edit Memory"
         )
 
+    async def expire_active_revision(
+        self,
+        memory_id: UUID,
+        expected_revision_number: int,
+    ) -> None:
+        raise AssertionError(
+            "Read Governance must not expire Memory"
+        )
+
     async def delete_memory(
         self,
         memory_id: UUID,
