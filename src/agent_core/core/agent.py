@@ -3,6 +3,7 @@ import logging
 from agent_core.characters import CharacterDefinition
 from agent_core.composition import PromptContextComposer
 from agent_core.core.message import Message
+from agent_core.memory.retriever import MemoryRetriever
 from agent_core.providers import (
     LLMProvider,
     LLMProviderError,
@@ -104,11 +105,13 @@ class Agent:
         character: CharacterDefinition,
         composer: PromptContextComposer,
         clock: Clock,
+        memory_retriever: MemoryRetriever,
     ) -> None:
         self.name = name
         self._provider = provider
         self._character = character
         self._composer = composer
+        self._memory_retriever = memory_retriever
         self._clock = clock
 
     async def process_message(
@@ -131,9 +134,14 @@ class Agent:
                 current_datetime=current_datetime,
             )
 
+            memory_context = await self._memory_retriever.retrieve(
+                user_text,
+            )
+
             request = self._composer.compose(
                 character=self._character,
                 temporal_context=temporal_context,
+                memory_context=memory_context,
                 user_message=user_text,
             )
 

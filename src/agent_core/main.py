@@ -12,6 +12,16 @@ from agent_core.composition import PromptContextComposer
 from agent_core.config import Settings, get_settings
 from agent_core.core.agent import Agent
 from agent_core.events import EventBus
+from agent_core.memory import (
+    MemoryRetrievalLimits,
+    MemoryRetrievalPolicy,
+    MemoryRetrievalService,
+)
+from agent_core.memory.persistence import (
+    SQLiteMemoryRepository,
+    create_memory_engine,
+    create_memory_session_factory,
+)
 from agent_core.observability import setup_logging
 from agent_core.providers import ProviderConfigurationError
 from agent_core.providers.deepseek import DeepSeekProvider
@@ -98,6 +108,27 @@ async def run() -> None:
     composer = PromptContextComposer()
     clock = SystemClock()
 
+    memory_engine = create_memory_engine(
+        settings.memory_database_path,
+    )
+
+    memory_session_factory = create_memory_session_factory(
+        memory_engine,
+    )
+
+    memory_repository = SQLiteMemoryRepository(
+        session_factory=memory_session_factory,
+    )
+
+    memory_policy = MemoryRetrievalPolicy(
+        limits=MemoryRetrievalLimits(),
+    )
+
+    memory_retriever = MemoryRetrievalService(
+        repository=memory_repository,
+        policy=memory_policy,
+    )
+
     provider = _create_provider(
         settings,
     )
@@ -145,6 +176,7 @@ async def run() -> None:
                 character=active_character,
                 composer=composer,
                 clock=clock,
+                memory_retriever=memory_retriever,
             )
 
             server = WebSocketServer(

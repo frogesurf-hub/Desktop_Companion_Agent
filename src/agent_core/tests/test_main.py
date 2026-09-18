@@ -265,10 +265,12 @@ def _install_runtime_fakes(
             character: CharacterDefinition,
             composer: PromptContextComposer,
             clock: Clock,
+            memory_retriever=None
         ) -> None:
             self.character = character
             self.composer = composer
             self.clock = clock
+            self.memory_retriever = memory_retriever
             calls.append(
                 (
                     "agent_init",

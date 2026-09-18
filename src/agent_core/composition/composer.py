@@ -1,4 +1,5 @@
 from agent_core.characters import CharacterDefinition
+from agent_core.memory.retrieval import PreparedMemoryContext
 from agent_core.providers import (
     LLMMessage,
     LLMRequest,
@@ -49,6 +50,7 @@ class PromptContextComposer:
         *,
         character: CharacterDefinition,
         temporal_context: TemporalContext,
+        memory_context: PreparedMemoryContext | None = None,
         user_message: str,
     ) -> LLMRequest:
         """
@@ -58,6 +60,7 @@ class PromptContextComposer:
         system_content = self._compose_system_content(
             character=character,
             temporal_context=temporal_context,
+            memory_context=memory_context,
         )
 
         return LLMRequest(
@@ -78,6 +81,7 @@ class PromptContextComposer:
         *,
         character: CharacterDefinition,
         temporal_context: TemporalContext,
+        memory_context: PreparedMemoryContext | None = None,
     ) -> str:
         """
         按稳定语义顺序生成 system context。
@@ -87,6 +91,9 @@ class PromptContextComposer:
             _render_section(
                 "Runtime Rules",
                 self._runtime_instructions,
+            ),
+            _render_memory_context(
+                memory_context or PreparedMemoryContext(),
             ),
             _render_temporal_context(
                 temporal_context,
@@ -136,9 +143,17 @@ class PromptContextComposer:
                 )
             )
 
-        return "\n\n".join(
-            sections,
-        )
+        content = "\n\n".join(
+            section.strip()
+            for section in sections
+        ).strip()
+
+        while "\n\n\n" in content:
+            content = content.replace(
+                "\n\n\n",
+                "\n\n",
+            )
+        return content
 
 
 def _render_section(
@@ -153,6 +168,49 @@ def _render_section(
         f"[{title}]\n"
         f"{content.strip()}"
     )
+
+
+def _render_memory_context(
+    context: PreparedMemoryContext,
+) -> str:
+    sections: list[str] = []
+
+    if context.user_profile:
+        sections.append(
+            _render_section(
+                "User Profile",
+                "\n".join(context.user_profile),
+            )
+        )
+
+    if context.working_context:
+        sections.append(
+            _render_section(
+                "Working Context",
+                "\n".join(context.working_context),
+            )
+        )
+
+    if context.relevant_episodes:
+        sections.append(
+            _render_section(
+                "Relevant Episodes",
+                "\n".join(context.relevant_episodes),
+            )
+        )
+
+    if context.relationship_context:
+        sections.append(
+            _render_section(
+                "Relationship Context",
+                "\n".join(context.relationship_context),
+            )
+        )
+
+    if not sections:
+        return ""
+
+    return "[Memory Context]\n\n" + "\n\n".join(sections)
 
 
 def _render_temporal_context(

@@ -7,6 +7,7 @@ from datetime import (
 from agent_core.characters import CharacterDefinition
 from agent_core.composition import PromptContextComposer
 from agent_core.core.agent import Agent
+from agent_core.memory.retrieval import PreparedMemoryContext
 from agent_core.providers import (
     LLMProvider,
     LLMProviderError,
@@ -88,12 +89,46 @@ class FixedClock:
         return self._current_datetime
 
 
+class FakeMemoryRetriever:
+    """
+    Test-only Memory Retriever.
+
+    Does not access repository/database.
+    Returns predefined PreparedMemoryContext.
+    """
+
+    def __init__(
+        self,
+        context: PreparedMemoryContext,
+    ) -> None:
+        self._context = context
+        self.queries: list[str] = []
+
+    async def retrieve(
+        self,
+        query: str,
+    ) -> PreparedMemoryContext:
+        self.queries.append(
+            query,
+        )
+
+        return self._context
+
+
 def create_test_agent(
     provider: LLMProvider,
+    *,
+    memory_context: PreparedMemoryContext | None = None,
 ) -> Agent:
     """
     创建具备完整 Phase 3 Runtime dependencies 的测试 Agent。
     """
+    if memory_context is None:
+        memory_context = PreparedMemoryContext()
+
+    memory_retriever = FakeMemoryRetriever(
+        memory_context,
+    )
 
     return Agent(
         provider=provider,
@@ -117,4 +152,5 @@ def create_test_agent(
                 ),
             )
         ),
+        memory_retriever=memory_retriever,
     )

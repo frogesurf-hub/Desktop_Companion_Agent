@@ -14,6 +14,7 @@ class MemoryRetrievalService:
 
     async def retrieve(
         self,
+        query: str
     ) -> PreparedMemoryContext:
         """
         根据 RetrievalPolicy 获取可用 Memory Context。

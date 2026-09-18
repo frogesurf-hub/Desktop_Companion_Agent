@@ -16,6 +16,13 @@ from agent_core.memory.models import (
     MemorySource,
 )
 from agent_core.memory.repository import MemoryRepository
+from agent_core.memory.retrieval_policy import (
+    MemoryRetrievalLimits,
+    MemoryRetrievalPolicy,
+)
+from agent_core.memory.retrieval_service import (
+    MemoryRetrievalService,
+)
 
 __all__ = [
     "Memory",
@@ -32,5 +39,8 @@ __all__ = [
     "MemoryGovernanceService",
     "MemoryNotFoundError",
     "MemoryStateError",
+    "MemoryRetrievalLimits",
+    "MemoryRetrievalPolicy",
+    "MemoryRetrievalService",
 
 ]

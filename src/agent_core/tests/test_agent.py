@@ -3,6 +3,7 @@ import asyncio
 import pytest
 
 from agent_core.core.message import Message
+from agent_core.memory.retrieval import PreparedMemoryContext
 from agent_core.providers import (
     LLMProviderError,
     LLMResponse,
@@ -123,6 +124,50 @@ def test_agent_uses_provider_for_chat_message() -> None:
 
     assert "Current date: 2026-09-13" in system_content
     assert "Current weekday: Sunday" in system_content
+
+
+def test_agent_includes_memory_context_in_prompt() -> None:
+    provider = FakeLLMProvider(
+        response=LLMResponse(
+            content="ok",
+        ),
+    )
+
+    agent = create_test_agent(
+        provider,
+        memory_context=PreparedMemoryContext(
+            user_profile=(
+                "User likes programming.",
+            ),
+            working_context=(
+                "Building Desktop Companion Agent.",
+            ),
+        ),
+    )
+
+    message = Message(
+        type="chat",
+        source="desktop",
+        payload={
+            "message": "hello",
+        },
+    )
+
+    asyncio.run(
+        agent.process_message(
+            message,
+        )
+    )
+
+    system_content = (
+        provider.requests[0]
+        .messages[0]
+        .content
+    )
+
+    assert "[Memory Context]" in system_content
+    assert "User likes programming." in system_content
+    assert "Building Desktop Companion Agent." in system_content
 
 
 @pytest.mark.parametrize(

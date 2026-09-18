@@ -54,6 +54,10 @@ class Settings(BaseSettings):
         ge=1,
         le=30,
     )
+    
+    memory_database_path: Path = Path(
+        "data/memory.db"
+    )
 
     character_definitions_dir: Path | None = None
 
