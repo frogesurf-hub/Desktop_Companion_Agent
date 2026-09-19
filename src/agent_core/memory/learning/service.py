@@ -21,6 +21,7 @@ from agent_core.memory.learning.resolver import (
 )
 from agent_core.memory.models import (
     Memory,
+    MemoryIdentityKey,
     MemoryLifecycle,
     MemoryRevision,
 )
@@ -34,8 +35,11 @@ class MemoryLearningOutcome(Enum):
     REJECTED = "rejected"
     CREATED = "created"
     DUPLICATE = "duplicate"
+    IDENTITY_ADOPTED = "identity_adopted"
     REPLACED = "replaced"
+    REACTIVATED = "reactivated"
     KEPT_CURRENT = "kept_current"
+    BLOCKED_DELETED = "blocked_deleted"
 
 
 class MemoryLearningStateError(Exception):
@@ -112,7 +116,7 @@ class MemoryCandidateResolver(Protocol):
 
 class MemoryLearningRepository(Protocol):
     """
-    Task 7D2 Learning Service 所需的最小写入边界。
+    Task 7D Learning Service 所需的最小写入边界。
     """
 
     async def create_memory(
@@ -123,6 +127,20 @@ class MemoryLearningRepository(Protocol):
         ...
 
     async def replace_active_revision(
+        self,
+        memory_id: UUID,
+        new_revision: MemoryRevision,
+    ) -> None:
+        ...
+
+    async def adopt_identity_key(
+        self,
+        memory_id: UUID,
+        identity_key: MemoryIdentityKey,
+    ) -> None:
+        ...
+
+    async def reactivate_memory(
         self,
         memory_id: UUID,
         new_revision: MemoryRevision,
@@ -200,6 +218,32 @@ class MemoryLearningService:
             resolution.kind
             is ExistingMemoryResolutionKind.DUPLICATE
         ):
+            if (
+                candidate.identity_key is not None
+                and memory.identity_key is None
+            ):
+                await self._repository.adopt_identity_key(
+                    memory.memory_id,
+                    candidate.identity_key,
+                )
+
+                adopted_memory = Memory(
+                    memory_id=memory.memory_id,
+                    domain=memory.domain,
+                    scope=memory.scope,
+                    identity_key=candidate.identity_key,
+                )
+
+                return MemoryLearningResult(
+                    outcome=(
+                        MemoryLearningOutcome
+                        .IDENTITY_ADOPTED
+                    ),
+                    eligibility=eligibility,
+                    memory=adopted_memory,
+                    revision=current_revision,
+                )
+
             return MemoryLearningResult(
                 outcome=MemoryLearningOutcome.DUPLICATE,
                 eligibility=eligibility,
@@ -218,11 +262,54 @@ class MemoryLearningService:
 
         if (
             current_revision.lifecycle
+            is MemoryLifecycle.DELETED
+        ):
+            return MemoryLearningResult(
+                outcome=(
+                    MemoryLearningOutcome
+                    .BLOCKED_DELETED
+                ),
+                eligibility=eligibility,
+                memory=memory,
+                revision=current_revision,
+            )
+
+        if (
+            current_revision.lifecycle
+            is MemoryLifecycle.EXPIRED
+        ):
+            incoming_revision = (
+                self._build_revision(
+                    candidate,
+                    memory_id=memory.memory_id,
+                    revision_number=(
+                        current_revision.revision_number
+                        + 1
+                    ),
+                )
+            )
+
+            await self._repository.reactivate_memory(
+                memory.memory_id,
+                incoming_revision,
+            )
+
+            return MemoryLearningResult(
+                outcome=(
+                    MemoryLearningOutcome.REACTIVATED
+                ),
+                eligibility=eligibility,
+                memory=memory,
+                revision=incoming_revision,
+            )
+
+        if (
+            current_revision.lifecycle
             is not MemoryLifecycle.ACTIVE
         ):
             raise MemoryLearningStateError(
                 "Existing Memory latest revision "
-                "is not ACTIVE"
+                "has unsupported lifecycle"
             )
 
         incoming_revision = (

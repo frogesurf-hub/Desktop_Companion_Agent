@@ -2,6 +2,8 @@ import asyncio
 from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
+import pytest
+
 from agent_core.memory.conflict import (
     MemoryConflictPolicy,
 )
@@ -13,6 +15,7 @@ from agent_core.memory.learning import (
     MemoryLearningOutcome,
     MemoryLearningPolicy,
     MemoryLearningService,
+    MemoryLearningStateError,
 )
 from agent_core.memory.models import (
     Memory,
@@ -76,6 +79,20 @@ class ProbeMemoryLearningRepository:
             ]
         ] = []
 
+        self.adopt_calls: list[
+            tuple[
+                UUID,
+                MemoryIdentityKey,
+            ]
+        ] = []
+
+        self.reactivate_calls: list[
+            tuple[
+                UUID,
+                MemoryRevision,
+            ]
+        ] = []
+
     async def create_memory(
         self,
         memory: Memory,
@@ -94,6 +111,30 @@ class ProbeMemoryLearningRepository:
         new_revision: MemoryRevision,
     ) -> None:
         self.replace_calls.append(
+            (
+                memory_id,
+                new_revision,
+            )
+        )
+
+    async def adopt_identity_key(
+        self,
+        memory_id: UUID,
+        identity_key: MemoryIdentityKey,
+    ) -> None:
+        self.adopt_calls.append(
+            (
+                memory_id,
+                identity_key,
+            )
+        )
+
+    async def reactivate_memory(
+        self,
+        memory_id: UUID,
+        new_revision: MemoryRevision,
+    ) -> None:
+        self.reactivate_calls.append(
             (
                 memory_id,
                 new_revision,
@@ -449,3 +490,237 @@ def test_learning_service_replaces_lower_authority_current_revision(
     )
 
     assert repository.create_calls == []
+
+
+def test_learning_service_adopts_identity_for_legacy_duplicate(
+) -> None:
+    repository = ProbeMemoryLearningRepository()
+
+    legacy_memory = Memory(
+        memory_id=_MEMORY_ID,
+        domain=MemoryDomain.USER_PROFILE,
+        scope=_scope(),
+    )
+
+    current_revision = _revision(
+        source=MemorySource.USER_EXPLICIT,
+        content="The user prefers C#.",
+    )
+
+    service, _ = _service(
+        resolution=ExistingMemoryResolution(
+            kind=(
+                ExistingMemoryResolutionKind
+                .DUPLICATE
+            ),
+            memory=legacy_memory,
+            latest_revision=current_revision,
+        ),
+        repository=repository,
+    )
+
+    candidate = _candidate()
+
+    result = asyncio.run(
+        service.learn_candidate(
+            candidate,
+            learning_input=_learning_input(),
+        )
+    )
+
+    assert (
+        result.outcome
+        is MemoryLearningOutcome.IDENTITY_ADOPTED
+    )
+
+    assert repository.adopt_calls == [
+        (
+            _MEMORY_ID,
+            _identity_key(),
+        )
+    ]
+
+    assert result.memory is not None
+    assert (
+        result.memory.identity_key
+        == candidate.identity_key
+    )
+
+    assert result.revision == current_revision
+
+    assert repository.create_calls == []
+    assert repository.replace_calls == []
+    assert repository.reactivate_calls == []
+
+
+def test_learning_service_reactivates_expired_memory(
+) -> None:
+    repository = ProbeMemoryLearningRepository()
+
+    memory = _memory()
+
+    expired_revision = MemoryRevision(
+        memory_id=_MEMORY_ID,
+        revision_number=2,
+        content="The user prefers Python.",
+        source=MemorySource.AUTOMATIC_EXPLICIT_FACT,
+        lifecycle=MemoryLifecycle.EXPIRED,
+        recorded_at=(
+            _CREATED_AT
+            - timedelta(days=10)
+        ),
+        occurred_at=(
+            _OCCURRED_AT
+            - timedelta(days=10)
+        ),
+    )
+
+    service, _ = _service(
+        resolution=ExistingMemoryResolution(
+            kind=(
+                ExistingMemoryResolutionKind
+                .EXISTING
+            ),
+            memory=memory,
+            latest_revision=expired_revision,
+        ),
+        repository=repository,
+    )
+
+    candidate = _candidate(
+        content="The user prefers Rust.",
+    )
+
+    result = asyncio.run(
+        service.learn_candidate(
+            candidate,
+            learning_input=_learning_input(),
+        )
+    )
+
+    assert (
+        result.outcome
+        is MemoryLearningOutcome.REACTIVATED
+    )
+
+    assert len(repository.reactivate_calls) == 1
+
+    memory_id, revision = (
+        repository.reactivate_calls[0]
+    )
+
+    assert memory_id == _MEMORY_ID
+    assert revision.revision_number == 3
+    assert revision.content == candidate.content
+
+    assert (
+        revision.lifecycle
+        is MemoryLifecycle.ACTIVE
+    )
+
+    assert result.memory == memory
+    assert result.revision == revision
+
+    assert repository.create_calls == []
+    assert repository.replace_calls == []
+    assert repository.adopt_calls == []
+
+
+def test_learning_service_does_not_resurrect_deleted_memory(
+) -> None:
+    repository = ProbeMemoryLearningRepository()
+
+    memory = _memory()
+
+    tombstone = MemoryRevision(
+        memory_id=_MEMORY_ID,
+        revision_number=3,
+        content=None,
+        source=MemorySource.USER_EDIT,
+        lifecycle=MemoryLifecycle.DELETED,
+        recorded_at=(
+            _CREATED_AT
+            - timedelta(days=1)
+        ),
+    )
+
+    service, _ = _service(
+        resolution=ExistingMemoryResolution(
+            kind=(
+                ExistingMemoryResolutionKind
+                .EXISTING
+            ),
+            memory=memory,
+            latest_revision=tombstone,
+        ),
+        repository=repository,
+    )
+
+    result = asyncio.run(
+        service.learn_candidate(
+            _candidate(
+                content="The user prefers Rust.",
+            ),
+            learning_input=_learning_input(),
+        )
+    )
+
+    assert (
+        result.outcome
+        is MemoryLearningOutcome.BLOCKED_DELETED
+    )
+
+    assert result.memory == memory
+    assert result.revision == tombstone
+
+    assert repository.create_calls == []
+    assert repository.replace_calls == []
+    assert repository.adopt_calls == []
+    assert repository.reactivate_calls == []
+
+
+def test_learning_service_rejects_superseded_latest_state(
+) -> None:
+    repository = ProbeMemoryLearningRepository()
+
+    memory = _memory()
+
+    superseded_revision = MemoryRevision(
+        memory_id=_MEMORY_ID,
+        revision_number=2,
+        content="Old fact.",
+        source=MemorySource.USER_EXPLICIT,
+        lifecycle=MemoryLifecycle.SUPERSEDED,
+        recorded_at=(
+            _CREATED_AT
+            - timedelta(days=1)
+        ),
+    )
+
+    service, _ = _service(
+        resolution=ExistingMemoryResolution(
+            kind=(
+                ExistingMemoryResolutionKind
+                .EXISTING
+            ),
+            memory=memory,
+            latest_revision=superseded_revision,
+        ),
+        repository=repository,
+    )
+
+    with pytest.raises(
+        MemoryLearningStateError,
+        match="unsupported lifecycle",
+    ):
+        asyncio.run(
+            service.learn_candidate(
+                _candidate(),
+                learning_input=_learning_input(),
+            )
+        )
+
+    assert repository.create_calls == []
+    assert repository.replace_calls == []
+    assert repository.adopt_calls == []
+    assert repository.reactivate_calls == []
