@@ -4,6 +4,7 @@ from uuid import UUID
 from agent_core.memory.models import (
     Memory,
     MemoryDomain,
+    MemoryIdentityKey,
     MemoryLifecycle,
     MemoryRevision,
     MemoryScope,
@@ -28,6 +29,11 @@ def memory_to_row(
         domain=memory.domain.value,
         scope_kind=memory.scope.kind.value,
         character_id=memory.scope.character_id,
+        identity_key=(
+            memory.identity_key.value
+            if memory.identity_key is not None
+            else None
+        ),
     )
 
 
@@ -47,6 +53,11 @@ def row_to_memory(
         memory_id=UUID(row.memory_id),
         domain=MemoryDomain(row.domain),
         scope=scope,
+        identity_key=(
+            MemoryIdentityKey(row.identity_key)
+            if row.identity_key is not None
+            else None
+        ),
     )
 
 

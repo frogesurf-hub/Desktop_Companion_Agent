@@ -14,6 +14,7 @@ import agent_core.memory.persistence.sqlite_repository as sqlite_repository_modu
 from agent_core.memory import (
     Memory,
     MemoryDomain,
+    MemoryIdentityKey,
     MemoryLifecycle,
     MemoryRevision,
     MemoryScope,
@@ -92,6 +93,9 @@ async def _exercise_round_trip(
             memory_id=_MEMORY_ID,
             domain=MemoryDomain.USER_PROFILE,
             scope=scope,
+            identity_key=MemoryIdentityKey(
+                "user_profile.preference.programming_language"
+            ),
         )
 
         recorded_at = datetime(
@@ -150,6 +154,12 @@ async def _exercise_round_trip(
         )
 
         assert loaded_memory == memory
+        assert loaded_memory is not None
+        assert loaded_memory.identity_key == (
+            MemoryIdentityKey(
+                "user_profile.preference.programming_language"
+            )
+        )
         assert loaded_revision is not None
         assert loaded_revision.content == (
             "The user prefers C#."

@@ -2,7 +2,7 @@ from pathlib import Path
 
 from alembic import command
 from alembic.config import Config
-from sqlalchemy import create_engine, inspect
+from sqlalchemy import create_engine, inspect, text
 
 
 def _build_alembic_config(
@@ -53,6 +53,15 @@ def test_initial_memory_migration_upgrade_and_downgrade(
     try:
         inspector = inspect(engine)
 
+        memory_columns = {
+            column["name"]
+            for column in inspector.get_columns(
+                "memories"
+            )
+        }
+
+        assert "identity_key" in memory_columns
+
         assert {
             "memories",
             "memory_revisions",
@@ -99,6 +108,101 @@ def test_initial_memory_migration_upgrade_and_downgrade(
             "memory_revisions"
             not in remaining_tables
         )
+
+    finally:
+        engine.dispose()
+
+
+def test_identity_key_migration_preserves_legacy_memory(
+    tmp_path: Path,
+) -> None:
+    database_path = (
+        tmp_path / "memory.db"
+    )
+
+    config = _build_alembic_config(
+        database_path
+    )
+
+    command.upgrade(
+        config,
+        "0001_memory",
+    )
+
+    engine = create_engine(
+        "sqlite:///"
+        f"{database_path.resolve().as_posix()}"
+    )
+
+    try:
+        with engine.begin() as connection:
+            connection.execute(
+                text(
+                    """
+                    INSERT INTO memories (
+                        memory_id,
+                        domain,
+                        scope_kind,
+                        character_id
+                    )
+                    VALUES (
+                        :memory_id,
+                        :domain,
+                        :scope_kind,
+                        NULL
+                    )
+                    """
+                ),
+                {
+                    "memory_id": (
+                        "12345678-1234-5678-1234-567812345678"
+                    ),
+                    "domain": "user_profile",
+                    "scope_kind": "global_user",
+                },
+            )
+    finally:
+        engine.dispose()
+
+    command.upgrade(
+        config,
+        "head",
+    )
+
+    engine = create_engine(
+        "sqlite:///"
+        f"{database_path.resolve().as_posix()}"
+    )
+
+    try:
+        inspector = inspect(engine)
+
+        memory_columns = {
+            column["name"]
+            for column in inspector.get_columns(
+                "memories"
+            )
+        }
+
+        assert "identity_key" in memory_columns
+
+        with engine.connect() as connection:
+            identity_key = connection.execute(
+                text(
+                    """
+                    SELECT identity_key
+                    FROM memories
+                    WHERE memory_id = :memory_id
+                    """
+                ),
+                {
+                    "memory_id": (
+                        "12345678-1234-5678-1234-567812345678"
+                    ),
+                },
+            ).scalar_one()
+
+        assert identity_key is None
 
     finally:
         engine.dispose()

@@ -51,6 +51,11 @@ class MemoryRow(Base):
         nullable=True,
     )
 
+    identity_key: Mapped[str | None] = mapped_column(
+        String(256),
+        nullable=True,
+    )
+
 
 class MemoryRevisionRow(Base):
     """
