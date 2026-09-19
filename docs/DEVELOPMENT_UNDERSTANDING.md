@@ -2,7 +2,7 @@
 
 > 项目：Desktop Companion Agent（桌面智能助手）
 > 适用阶段：Phase 4 — Memory System 起，后续 Phase 默认继续沿用，除非项目 owner 明确修改。
-> 目的：在不明显拖慢正式软件工程开发的前提下，让项目 owner 持续理解项目结构、设计理由、数据流与开发流程，避免协作退化为“复制代码 → pytest → diff → mypy → git”的机械执行。
+> 目的：在不明显拖慢正式软件工程开发的前提下，让项目 owner 持续理解项目结构、设计理由、数据流与开发流程，并建立以 Git 仓库为真实工程基线的跨 Task / 跨对话协作方式，避免协作退化为“复制代码 → pytest → diff → mypy → git”的机械执行。
 
 ---
 
@@ -816,14 +816,14 @@ Phase 5 会继续用到
 仍然保持：
 
 ```text
-Current Code
-当前源码
+Current Git Repository / Current Code
+当前 Git 仓库中的最新已提交源码
     >
-Current PROJECT_STATE / Phase Checkpoint
-当前状态文档
+Current PROJECT_STATE / Task Context / Phase Checkpoint
+当前状态文档、Task 上下文与 Phase 检查点
     >
-Current Architecture / Roadmap
-当前架构与路线
+Current Architecture / Roadmap / ADR
+当前架构、路线与正式架构决策
     >
 Historical Design Docs
 历史设计文档
@@ -841,6 +841,8 @@ Chat Memory
 - pytest / Ruff / mypy 保持质量门；
 - staged diff 必须人工审查；
 - Git commit 作为真实工程检查点；
+- 每个完成并通过验收的 Task 应及时 commit 并 push 到远程 Git 仓库；
+- 当远程仓库可访问时，Assistant 应优先读取仓库最新代码，不要求项目 owner 重复粘贴仓库中已经存在的源码；
 - 不根据聊天记忆猜当前源码；
 - 不为了教学目的降低架构质量。
 
@@ -1052,49 +1054,198 @@ Phase Scope
 
 理解机制用于帮助项目 owner 跟上开发，不得为了“更容易解释”而牺牲正确的工程设计。
 
-## Source Checkpoint / 源码快照约定
+## Git Repository / Task Checkpoint / 跨话题恢复约定
 
-为了保证长期开发、跨话题开发和上下文恢复时能够获得可靠的完整代码基线，
-项目在重要开发里程碑建立 Source Checkpoint。
+为了保证长期开发、跨话题开发和上下文恢复时能够获得可靠的工程基线，
+从本契约更新起，项目采用：
 
-Source Checkpoint 以当前项目完整源码 ZIP 为主体。
-必要时同时保存 Git Context 文本，用于记录当前 branch、HEAD、working tree 状态和近期提交历史。
+```text
+Git Repository
+远程 Git 仓库
+    ↓
+Task Commit / Push
+每个已完成 Task 的提交与同步
+    ↓
+Task Context / Current State
+任务上下文与当前状态说明
+    ↓
+Source Checkpoint ZIP
+重要阶段的离线源码快照
+```
 
-### 需要建立 Checkpoint 的情况
+Git 仓库成为日常开发的主要工程基线。
 
-以下情况默认建立新的 Source Checkpoint：
+### 19.1 Git 仓库作为当前源码事实来源
 
-1. 一个具有明显结构性变化的 Task 完成并提交后，例如：
-   - 新增新的核心子系统；
-   - 新增或修改 Persistence / Protocol / Provider / Character / Memory 等架构层；
-   - 新增较多源码文件或跨多个模块的大规模修改；
-   - 新增重要 ADR、Migration 或基础设施。
+当远程 Git 仓库可访问时：
 
-2. 即将进入新的 Project Conversation / Phase / 大型开发阶段之前。
+1. 当前源码以远程仓库最新已确认 commit 为准；
+2. Assistant 在开始新 Task、进入新对话或需要检查现有代码时，应优先读取仓库；
+3. 项目 owner 不需要为了让 Assistant“记住代码”而重复粘贴仓库中已经存在的文件；
+4. Assistant 不得仅凭聊天记忆推断当前源码；
+5. 如果聊天中的旧代码、旧设计与仓库最新代码冲突，以仓库最新已确认 commit 为准，除非项目 owner 明确说明正在查看历史版本。
 
-3. 当前完整源码与上一个 Source Checkpoint 已产生较大结构差异，且后续开发需要以新结构为基础时。
+Git 仓库记录：
 
-4. 每个 Phase 最终验收并提交完成后。
+- 当前源码；
+- commit 历史；
+- branch；
+- diff；
+- Task 工程检查点；
+- 回滚依据。
 
-### 不需要建立 Checkpoint 的情况
+### 19.2 每个 Task 完成后的 Git 同步
 
-以下情况通常不单独上传 ZIP：
+每个正式 Task 在完成实现并通过约定验收后，默认执行：
 
-- 小型 bug 修复；
-- 少量测试补充；
-- 单文件小范围修改；
-- formatting / lint / typo 修复；
-- 尚未完成或尚未 commit 的中间开发状态。
+```text
+Implementation
+实现
+    ↓
+Targeted / Full Tests
+目标测试 / 全量测试
+    ↓
+Ruff
+    ↓
+mypy
+    ↓
+git diff --check
+    ↓
+Working Diff Review
+工作区 diff 审查
+    ↓
+git add
+    ↓
+Staged Diff Review
+暂存区 diff 审查
+    ↓
+git commit
+    ↓
+git push
+    ↓
+Remote Sync Confirmed
+确认远程仓库已同步
+```
 
-除非这些修改本身成为后续开发的重要恢复基线。
+要求：
 
-### Checkpoint 内容
+- 不把尚未通过验收的中间状态当作 Task 完成；
+- Task 完成后应及时 push，不长期只保留本地 commit；
+- push 失败属于同步问题，不等于代码失败；应在网络恢复后补 push；
+- Assistant 在进入下一 Task 前，应确认当前 Task 的 commit 与远程同步状态；
+- 推荐一个 Task 对应一个清晰、可审查的主要 commit；确有必要时可包含多个小 commit，但必须保持语义清楚。
 
-源码快照建议命名：
+### 19.3 新对话启动契约
+
+进入新的 Project Conversation 时，不再要求默认上传完整源码 ZIP。
+
+新对话最小启动信息建议为：
+
+```text
+Project:
+Desktop Companion Agent
+
+Repository:
+<GitHub / Git repository URL>
+
+Current Phase:
+Phase X
+
+Completed:
+Task A ~ Task B
+
+Latest confirmed commit:
+<commit hash + commit message>
+
+Validation:
+- pytest: ...
+- Ruff: ...
+- mypy: ...
+
+Next:
+Task Y
+```
+
+然后 Assistant 应：
+
+```text
+1. 读取开发契约 / CURRENT_STATE / Task Plan
+2. 确认仓库最新 commit
+3. 读取当前 Task 定义
+4. 对齐现有架构
+5. 确认本 Task 边界
+6. 必要时提出 [理解思考] / [Owner Decision]
+7. 再进入设计与实现
+```
+
+禁止：
+
+- 在未读取当前仓库 / 当前状态的情况下直接假设 Task 内容；
+- 要求项目 owner 重复粘贴仓库里已有的大量代码；
+- 因为新开对话就重新从 Phase 开头解释或重做已经完成的工作；
+- 使用旧聊天记忆覆盖最新 commit。
+
+### 19.4 Task Context / Current State 文档
+
+为了降低跨话题恢复成本，项目可以维护一个轻量状态入口，例如：
+
+```text
+docs/CURRENT_CONTEXT.md
+```
+
+或等价的 Current State / Task Context 文件。
+
+建议记录：
+
+- 当前 Phase；
+- 已完成 Task；
+- 当前最新确认 commit；
+- 最近一次验证结果；
+- 当前架构增量；
+- 下一 Task；
+- 当前已知 Breakpoint；
+- 尚未解决的 Owner Decision。
+
+这个文件负责“开发状态恢复”。
+
+它不替代：
+
+- 源码；
+- ADR；
+- Roadmap；
+- Git commit 历史。
+
+### 19.5 Source Checkpoint ZIP 的新定位
+
+Source Checkpoint ZIP 不再是每个 Task 的默认恢复方式。
+
+ZIP 主要用于：
+
+1. 一个 Phase 最终验收完成后的长期归档；
+2. 即将进行大规模结构变化、且需要额外离线保险时；
+3. Git / GitHub 暂时不可访问，而 Assistant 需要完整源码时；
+4. 迁移电脑、比赛提交、离线备份或其他需要完整文件快照的场景；
+5. 项目 owner 或 Assistant 明确判断“当前结构值得建立离线恢复点”时。
+
+普通 Task 完成后：
+
+```text
+commit + push
+```
+
+即可作为默认 checkpoint。
+
+### 19.6 Source Checkpoint 命名
+
+需要建立 ZIP 时，建议命名：
 
 `Desktop_Companion_Agent_phaseX_taskY_checkpoint.zip`
 
-重要结构性 Checkpoint 可额外保存：
+Phase 最终归档可以使用：
+
+`Desktop_Companion_Agent_phaseX_final.zip`
+
+必要时可额外保存：
 
 `PHASE_X_TASKY_GIT_CONTEXT.txt`
 
@@ -1107,11 +1258,171 @@ Git Context 至少包含：
 
 完整 `.git` 目录不需要放入源码 ZIP。
 
-### 协作责任
+### 19.7 Git Context 的定位
 
-项目 owner 负责实际打包并上传 Source Checkpoint。
+`PHASE_X_TASKY_GIT_CONTEXT.txt` 是辅助上下文，不是源码主载体。
 
-AI assistant 在判断当前开发已经达到需要建立 Checkpoint 的里程碑时，
-应主动提醒项目 owner 上传最新 ZIP，并明确说明是否同时需要 Git Context。
+它适合：
 
-Checkpoint 不是每个 Task 的机械步骤，而是由结构变化和上下文恢复价值决定。
+- GitHub 临时不可访问；
+- 新对话需要快速确认 branch / HEAD / status；
+- 做离线 checkpoint 配套记录。
+
+如果仓库本身可直接读取且远程已同步，
+Git Context 可以省略。
+
+### 19.8 Assistant 的仓库读取责任
+
+当项目 owner 已提供可访问的 Git 仓库链接后：
+
+- Assistant 应优先自己读取仓库中的相关文件；
+- 只有在仓库不可访问、权限不足、文件未 push、或需要查看未提交工作区内容时，才要求项目 owner 额外提供文件 / diff / ZIP；
+- Assistant 不应因为“上下文太长”而退回到凭记忆开发；
+- 每个 Task 开始前，应先定位当前 commit、Task 定义和受影响模块；
+- 如果当前仓库状态与聊天内容不一致，应主动指出差异并停止假设。
+
+### 19.9 Assistant 的命令交付责任
+
+涉及代码修改、Git 或验证步骤时，Assistant 默认应同时给出：
+
+```text
+1. 修改目的
+2. 修改文件路径
+3. 具体代码 / patch / 命令
+4. 为什么运行这些验证
+5. 预期结果
+6. git add
+7. staged diff review
+8. commit message
+9. git push
+10. 下一步
+```
+
+避免只给抽象设计，让项目 owner 自行猜完整操作流程。
+
+如果修改较大，应优先拆成小步，并在每步通过后再继续。
+
+### 19.10 测试 / 代码失败时的回退规则
+
+出现连续失败时：
+
+```text
+Failure
+    ↓
+识别层级
+    ↓
+确认当前真实文件
+    ↓
+建立 Breakpoint
+    ↓
+最小修改
+    ↓
+Targeted Verification
+    ↓
+回到原 Task
+```
+
+Assistant 不应在没有读取当前真实代码的情况下连续猜测修复。
+
+如果前一个建议被实际代码证明错误，应明确修正判断，并以当前源码为准继续。
+
+### 19.11 Checkpoint 与协作责任
+
+项目 owner 负责：
+
+- 本地实际修改；
+- 运行测试；
+- git add / commit / push；
+- 必要时建立 ZIP 归档。
+
+Assistant 负责：
+
+- 判断 Task 是否已达到可提交状态；
+- 提醒进行 commit / push；
+- 提供 commit message 建议；
+- 确认是否需要额外 ZIP checkpoint；
+- 新对话时优先恢复仓库状态，而不是要求从头说明项目。
+
+默认规则：
+
+```text
+每个完成 Task
+→ commit + push
+
+每个 Phase 完成
+→ final checkpoint + 文档更新 + 可选 ZIP 归档
+```
+
+---
+
+# 20. 新对话恢复最小模板
+
+当项目 owner 准备在新对话继续开发时，可以直接粘贴：
+
+```md
+# Desktop Companion Agent — Conversation Handoff
+
+Repository:
+<仓库链接>
+
+Current Phase:
+Phase X
+
+Completed:
+Task A ~ Task B
+
+Latest confirmed commit:
+<hash> <message>
+
+Validation:
+- pytest: <result>
+- Ruff: <result>
+- mypy: <result>
+
+Next Task:
+Task Y
+
+Please follow:
+- docs/DEVELOPMENT_UNDERSTANDING.md
+- current architecture / ADR / task plan
+- repository latest commit as source of truth
+
+Before implementation:
+1. read Task Y definition;
+2. inspect current affected code from repository;
+3. explain Task position / data flow / increment;
+4. identify whether an ADR or Owner Decision is needed;
+5. then proceed with the agreed small-step workflow.
+```
+
+如果仓库当前不可访问，再补充：
+
+- `CURRENT_CONTEXT.md`；
+- `PHASE_X_TASKY_GIT_CONTEXT.txt`；
+- 或 Source Checkpoint ZIP。
+
+---
+
+# 21. 本契约的更新原则
+
+本文件本身也是正式协作契约。
+
+以后如果项目 owner 与 Assistant 形成新的稳定工作规则，例如：
+
+- 新的 Git 工作流；
+- 新的跨话题恢复方式；
+- 新的验证门；
+- 新的文档责任；
+- 新的 Breakpoint 规则；
+
+应优先更新本文件，而不是只留在聊天记录里。
+
+目标是：
+
+```text
+重要协作规则
+→ 落到仓库文档
+→ 新对话可恢复
+→ 不依赖 Assistant 记忆
+```
+
