@@ -278,14 +278,28 @@ This avoids introducing an unnecessary table, migration, repository, lifecycle a
 
 Task 7 needs a deterministic policy boundary that decides whether a Candidate is allowed to proceed.
 
-Initial accepted learning targets:
+The Eligibility Policy performs deterministic admission checks after
+Candidate extraction.
 
-- explicit stable user facts;
-- explicit stable preferences;
-- explicit long-term goals;
-- explicit durable current project/task context;
-- explicit important completed interaction events;
-- explicit Character-specific shared-history facts where Relationship scope is valid.
+Initial rejection conditions:
+
+- Candidate source is not `AUTOMATIC_EXPLICIT_FACT`;
+- Candidate does not originate from the current source message;
+- Candidate domain and scope are incompatible;
+- Relationship Memory targets a Character other than the active Character.
+
+Semantic questions such as whether a statement is explicit, speculative,
+inferred from repetition, psychological interpretation, or Character
+fiction belong to Candidate Extraction in Task 7E.
+
+Therefore:
+
+```text
+Extractor
+→ semantic candidate boundary
+
+Eligibility Policy
+→ deterministic provenance / scope boundary
 
 Initial rejection targets:
 
@@ -554,17 +568,21 @@ Expected verification:
 
 Goals:
 
-- implement deterministic candidate eligibility rules;
-- reject unsupported inference classes;
-- preserve existing domain/scope invariants;
+- implement deterministic Candidate admission rules;
+- validate automatic-learning provenance;
+- validate source-message provenance;
+- preserve Domain / Scope invariants;
+- enforce active-Character isolation for Relationship candidates;
+- keep semantic extraction decisions in Task 7E;
 - keep policy independent from persistence.
 
 Expected verification:
 
-- accepted explicit-fact cases;
-- rejected invalid/unsupported cases;
-- Character-scope validation;
-- empty/invalid candidate rejection.
+- supported automatic-learning source is accepted;
+- unsupported source is rejected;
+- mismatched source message is rejected;
+- Domain / Scope mismatch is rejected;
+- Relationship candidate for another Character is rejected.
 
 ---
 
