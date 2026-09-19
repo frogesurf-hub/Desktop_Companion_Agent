@@ -18,6 +18,14 @@ from agent_core.memory.learning.resolver import (
     ExistingMemoryStateError,
     MemoryResolutionRepository,
 )
+from agent_core.memory.learning.service import (
+    MemoryCandidateResolver,
+    MemoryLearningOutcome,
+    MemoryLearningRepository,
+    MemoryLearningResult,
+    MemoryLearningService,
+    MemoryLearningStateError,
+)
 
 __all__ = [
     "MemoryCandidate",
@@ -32,4 +40,10 @@ __all__ = [
     "ExistingMemoryResolver",
     "ExistingMemoryStateError",
     "MemoryResolutionRepository",
+    "MemoryCandidateResolver",
+    "MemoryLearningOutcome",
+    "MemoryLearningRepository",
+    "MemoryLearningResult",
+    "MemoryLearningService",
+    "MemoryLearningStateError",
 ]
