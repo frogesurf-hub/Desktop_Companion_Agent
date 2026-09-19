@@ -10,6 +10,14 @@ from agent_core.memory.learning.policy import (
     MemoryEligibilityResult,
     MemoryLearningPolicy,
 )
+from agent_core.memory.learning.resolver import (
+    ExistingMemoryResolution,
+    ExistingMemoryResolutionError,
+    ExistingMemoryResolutionKind,
+    ExistingMemoryResolver,
+    ExistingMemoryStateError,
+    MemoryResolutionRepository,
+)
 
 __all__ = [
     "MemoryCandidate",
@@ -18,4 +26,10 @@ __all__ = [
     "MemoryEligibilityResult",
     "MemoryLearningInput",
     "MemoryLearningPolicy",
+    "ExistingMemoryResolution",
+    "ExistingMemoryResolutionError",
+    "ExistingMemoryResolutionKind",
+    "ExistingMemoryResolver",
+    "ExistingMemoryStateError",
+    "MemoryResolutionRepository",
 ]
