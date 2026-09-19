@@ -73,11 +73,35 @@ The identity key:
 The key is optional because some event-like or legacy Memory may not
 have a stable semantic slot.
 
-Existing-Memory Resolution will use domain, scope, and identity key
-before conflict handling.
+Existing-Memory Resolution uses domain, scope, and identity key before
+conflict handling.
 
-Exact-content duplicate detection may remain as a fallback for
-keyless or legacy Memory.
+Exact-content duplicate detection may remain as a fallback for keyless
+or legacy Memory.
+
+For non-null identity keys, persistence enforces uniqueness within the
+logical Memory namespace:
+
+```text
+GLOBAL_USER:
+domain + GLOBAL_USER scope + identity_key
+    → at most one logical Memory
+
+CHARACTER:
+domain + character_id + identity_key
+    → at most one logical Memory per Character
+```
+
+The same Character-scoped identity key may therefore exist for different
+Characters, while duplicate logical identities within one Character are
+rejected.
+
+Null identity keys remain permitted and are not subject to this identity
+uniqueness rule.
+
+Database uniqueness is a defensive consistency guarantee. It does not
+replace `ExistingMemoryResolver`, which remains responsible for resolving
+a Candidate to an existing logical Memory before conflict handling.
 
 ## Consequences
 
@@ -92,7 +116,9 @@ conflict resolution
 `MemoryConflictPolicy` remains responsible only for deciding whether a
 known existing Memory should be replaced.
 
-Persistence must later store the identity key with logical Memory.
+Persistence stores the identity key with logical Memory and protects
+non-null logical identities from duplicate durable rows within the same
+domain and scope.
 
 Candidate extraction is responsible for assigning an identity key when
 the extracted fact has a stable logical identity.

@@ -30,6 +30,33 @@ class MemoryRow(Base):
     """
 
     __tablename__ = "memories"
+    __table_args__ = (
+        Index(
+            "uq_memory_global_identity",
+            "domain",
+            "scope_kind",
+            "identity_key",
+            unique=True,
+            sqlite_where=text(
+                "identity_key IS NOT NULL "
+                "AND scope_kind = 'global_user' "
+                "AND character_id IS NULL"
+            ),
+        ),
+        Index(
+            "uq_memory_character_identity",
+            "domain",
+            "scope_kind",
+            "character_id",
+            "identity_key",
+            unique=True,
+            sqlite_where=text(
+                "identity_key IS NOT NULL "
+                "AND scope_kind = 'character' "
+                "AND character_id IS NOT NULL"
+            ),
+        ),
+    )
 
     memory_id: Mapped[str] = mapped_column(
         String(36),

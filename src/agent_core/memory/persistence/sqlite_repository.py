@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import (
 from agent_core.memory.models import (
     Memory,
     MemoryDomain,
+    MemoryIdentityKey,
     MemoryLifecycle,
     MemoryRevision,
     MemoryScope,
@@ -86,6 +87,49 @@ class SQLiteMemoryRepository:
                 MemoryRow,
                 str(memory_id),
             )
+
+            if row is None:
+                return None
+
+            return row_to_memory(row)
+
+    async def find_memory_by_identity(
+        self,
+        *,
+        domain: MemoryDomain,
+        scope: MemoryScope,
+        identity_key: MemoryIdentityKey,
+    ) -> Memory | None:
+        """
+        按 Domain、Scope 和 logical identity
+        查找唯一的逻辑 Memory。
+        """
+
+        statement = select(MemoryRow).where(
+            MemoryRow.domain == domain.value,
+            MemoryRow.scope_kind == scope.kind.value,
+            MemoryRow.identity_key == identity_key.value,
+        )
+
+        if (
+            scope.kind
+            is MemoryScopeKind.CHARACTER
+        ):
+            statement = statement.where(
+                MemoryRow.character_id
+                == scope.character_id
+            )
+        else:
+            statement = statement.where(
+                MemoryRow.character_id.is_(None)
+            )
+
+        async with self._session_factory() as session:
+            result = await session.execute(
+                statement
+            )
+
+            row = result.scalars().one_or_none()
 
             if row is None:
                 return None

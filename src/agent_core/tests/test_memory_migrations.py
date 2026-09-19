@@ -78,6 +78,23 @@ def test_initial_memory_migration_upgrade_and_downgrade(
             )
         }
 
+        memory_indexes = {
+            index["name"]
+            for index in inspector.get_indexes(
+                "memories"
+            )
+        }
+
+        assert (
+            "uq_memory_global_identity"
+            in memory_indexes
+        )
+
+        assert (
+            "uq_memory_character_identity"
+            in memory_indexes
+        )
+
         assert (
             "uq_memory_active_revision"
             in revision_indexes

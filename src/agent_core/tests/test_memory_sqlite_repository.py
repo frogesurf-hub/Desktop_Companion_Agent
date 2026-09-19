@@ -40,6 +40,137 @@ _RELATIONSHIP_MEMORY_ID = UUID(
 )
 
 
+async def _exercise_rejects_duplicate_global_identity(
+    database_path: Path,
+) -> None:
+    engine, repository = (
+        await _build_repository(
+            database_path
+        )
+    )
+
+    try:
+        identity_key = MemoryIdentityKey(
+            "user_profile.preference.programming_language"
+        )
+
+        first_memory = Memory(
+            memory_id=_MEMORY_ID,
+            domain=MemoryDomain.USER_PROFILE,
+            scope=MemoryScope(
+                kind=MemoryScopeKind.GLOBAL_USER,
+            ),
+            identity_key=identity_key,
+        )
+
+        second_memory_id = UUID(
+            "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+        )
+
+        second_memory = Memory(
+            memory_id=second_memory_id,
+            domain=MemoryDomain.USER_PROFILE,
+            scope=MemoryScope(
+                kind=MemoryScopeKind.GLOBAL_USER,
+            ),
+            identity_key=identity_key,
+        )
+
+        first_revision = MemoryRevision(
+            memory_id=_MEMORY_ID,
+            revision_number=1,
+            content="C#",
+            source=MemorySource.USER_EXPLICIT,
+            lifecycle=MemoryLifecycle.ACTIVE,
+            recorded_at=datetime.now(UTC),
+        )
+
+        second_revision = MemoryRevision(
+            memory_id=second_memory_id,
+            revision_number=1,
+            content="Rust",
+            source=MemorySource.USER_EXPLICIT,
+            lifecycle=MemoryLifecycle.ACTIVE,
+            recorded_at=datetime.now(UTC),
+        )
+
+        await repository.create_memory(
+            first_memory,
+            first_revision,
+        )
+
+        with pytest.raises(IntegrityError):
+            await repository.create_memory(
+                second_memory,
+                second_revision,
+            )
+
+    finally:
+        await engine.dispose()
+
+
+async def _exercise_identity_lookup(
+    database_path: Path,
+) -> None:
+    engine, repository = (
+        await _build_repository(
+            database_path
+        )
+    )
+
+    try:
+        identity_key = MemoryIdentityKey(
+            "user_profile.preference.programming_language"
+        )
+
+        memory = Memory(
+            memory_id=_MEMORY_ID,
+            domain=MemoryDomain.USER_PROFILE,
+            scope=MemoryScope(
+                kind=MemoryScopeKind.GLOBAL_USER,
+            ),
+            identity_key=identity_key,
+        )
+
+        revision = MemoryRevision(
+            memory_id=_MEMORY_ID,
+            revision_number=1,
+            content="The user prefers C#.",
+            source=MemorySource.USER_EXPLICIT,
+            lifecycle=MemoryLifecycle.ACTIVE,
+            recorded_at=datetime.now(UTC),
+        )
+
+        await repository.create_memory(
+            memory,
+            revision,
+        )
+
+        found = (
+            await repository.find_memory_by_identity(
+                domain=MemoryDomain.USER_PROFILE,
+                scope=memory.scope,
+                identity_key=identity_key,
+            )
+        )
+
+        missing = (
+            await repository.find_memory_by_identity(
+                domain=MemoryDomain.USER_PROFILE,
+                scope=memory.scope,
+                identity_key=MemoryIdentityKey(
+                    "user_profile.preference.editor"
+                ),
+            )
+        )
+
+        assert found == memory
+        assert missing is None
+
+    finally:
+        await engine.dispose()
+
+
 async def _create_schema(
     connection: AsyncConnection,
 ) -> None:
@@ -1090,6 +1221,177 @@ async def _exercise_database_rejects_multiple_active_revisions(
         await engine.dispose()
 
 
+async def _exercise_character_identity_isolated_by_character(
+    database_path: Path,
+) -> None:
+    engine, repository = (
+        await _build_repository(
+            database_path
+        )
+    )
+
+    try:
+        identity_key = MemoryIdentityKey(
+            "relationship.shared_project"
+        )
+
+        aria_memory = Memory(
+            memory_id=_MEMORY_ID,
+            domain=MemoryDomain.RELATIONSHIP,
+            scope=MemoryScope(
+                kind=MemoryScopeKind.CHARACTER,
+                character_id="aria",
+            ),
+            identity_key=identity_key,
+        )
+
+        other_memory = Memory(
+            memory_id=_RELATIONSHIP_MEMORY_ID,
+            domain=MemoryDomain.RELATIONSHIP,
+            scope=MemoryScope(
+                kind=MemoryScopeKind.CHARACTER,
+                character_id="other",
+            ),
+            identity_key=identity_key,
+        )
+
+        aria_revision = MemoryRevision(
+            memory_id=_MEMORY_ID,
+            revision_number=1,
+            content="Aria shared project.",
+            source=MemorySource.USER_EXPLICIT,
+            lifecycle=MemoryLifecycle.ACTIVE,
+            recorded_at=datetime.now(UTC),
+        )
+
+        other_revision = MemoryRevision(
+            memory_id=_RELATIONSHIP_MEMORY_ID,
+            revision_number=1,
+            content="Other shared project.",
+            source=MemorySource.USER_EXPLICIT,
+            lifecycle=MemoryLifecycle.ACTIVE,
+            recorded_at=datetime.now(UTC),
+        )
+
+        await repository.create_memory(
+            aria_memory,
+            aria_revision,
+        )
+
+        await repository.create_memory(
+            other_memory,
+            other_revision,
+        )
+
+        aria_found = (
+            await repository.find_memory_by_identity(
+                domain=MemoryDomain.RELATIONSHIP,
+                scope=aria_memory.scope,
+                identity_key=identity_key,
+            )
+        )
+
+        other_found = (
+            await repository.find_memory_by_identity(
+                domain=MemoryDomain.RELATIONSHIP,
+                scope=other_memory.scope,
+                identity_key=identity_key,
+            )
+        )
+
+        assert aria_found == aria_memory
+        assert other_found == other_memory
+
+    finally:
+        await engine.dispose()
+
+
+async def _exercise_rejects_duplicate_character_identity(
+    database_path: Path,
+) -> None:
+    engine, repository = (
+        await _build_repository(
+            database_path
+        )
+    )
+
+    try:
+        identity_key = MemoryIdentityKey(
+            "relationship.shared_project"
+        )
+
+        scope = MemoryScope(
+            kind=MemoryScopeKind.CHARACTER,
+            character_id="aria",
+        )
+
+        first_memory = Memory(
+            memory_id=_MEMORY_ID,
+            domain=MemoryDomain.RELATIONSHIP,
+            scope=scope,
+            identity_key=identity_key,
+        )
+
+        second_memory = Memory(
+            memory_id=_RELATIONSHIP_MEMORY_ID,
+            domain=MemoryDomain.RELATIONSHIP,
+            scope=scope,
+            identity_key=identity_key,
+        )
+
+        first_revision = MemoryRevision(
+            memory_id=_MEMORY_ID,
+            revision_number=1,
+            content="First.",
+            source=MemorySource.USER_EXPLICIT,
+            lifecycle=MemoryLifecycle.ACTIVE,
+            recorded_at=datetime.now(UTC),
+        )
+
+        second_revision = MemoryRevision(
+            memory_id=_RELATIONSHIP_MEMORY_ID,
+            revision_number=1,
+            content="Second.",
+            source=MemorySource.USER_EXPLICIT,
+            lifecycle=MemoryLifecycle.ACTIVE,
+            recorded_at=datetime.now(UTC),
+        )
+
+        await repository.create_memory(
+            first_memory,
+            first_revision,
+        )
+
+        with pytest.raises(IntegrityError):
+            await repository.create_memory(
+                second_memory,
+                second_revision,
+            )
+
+    finally:
+        await engine.dispose()
+
+
+def test_database_rejects_duplicate_character_identity(
+    tmp_path: Path,
+) -> None:
+    asyncio.run(
+        _exercise_rejects_duplicate_character_identity(
+            tmp_path / "memory.db"
+        )
+    )
+
+
+def test_character_identity_isolated_by_character(
+    tmp_path: Path,
+) -> None:
+    asyncio.run(
+        _exercise_character_identity_isolated_by_character(
+            tmp_path / "memory.db"
+        )
+    )
+
+
 def test_memory_database_rejects_multiple_active_revisions(
     tmp_path: Path,
 ) -> None:
@@ -1169,6 +1471,26 @@ def test_sqlite_repository_rejects_mismatched_initial_revision(
 ) -> None:
     asyncio.run(
         _exercise_invalid_initial_revision(
+            tmp_path / "memory.db"
+        )
+    )
+
+
+def test_sqlite_repository_finds_memory_by_identity(
+    tmp_path: Path,
+) -> None:
+    asyncio.run(
+        _exercise_identity_lookup(
+            tmp_path / "memory.db"
+        )
+    )
+
+
+def test_database_rejects_duplicate_global_identity(
+    tmp_path: Path,
+) -> None:
+    asyncio.run(
+        _exercise_rejects_duplicate_global_identity(
             tmp_path / "memory.db"
         )
     )
