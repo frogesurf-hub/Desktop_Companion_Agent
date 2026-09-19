@@ -136,6 +136,68 @@ class SQLiteMemoryRepository:
 
             return row_to_memory(row)
 
+    async def adopt_identity_key(
+        self,
+        memory_id: UUID,
+        identity_key: MemoryIdentityKey,
+    ) -> None:
+        """
+        为 legacy/keyless logical Memory
+        原子补充 identity key。
+
+        已有相同 identity key 时幂等；
+        已有不同 identity key 时拒绝。
+        """
+
+        async with self._session_factory() as session:
+            async with session.begin():
+                statement = (
+                    update(MemoryRow)
+                    .where(
+                        MemoryRow.memory_id
+                        == str(memory_id),
+                        MemoryRow.identity_key.is_(None),
+                    )
+                    .values(
+                        identity_key=identity_key.value
+                    )
+                    .returning(
+                        MemoryRow.memory_id
+                    )
+                )
+
+                result = await session.execute(
+                    statement
+                )
+
+                updated_memory_id = (
+                    result.scalar_one_or_none()
+                )
+
+                if updated_memory_id is not None:
+                    return
+
+                row = await session.get(
+                    MemoryRow,
+                    str(memory_id),
+                )
+
+                if row is None:
+                    raise ValueError(
+                        "Memory does not exist"
+                    )
+
+                if (
+                    row.identity_key
+                    == identity_key.value
+                ):
+                    return
+
+                raise ValueError(
+                    "Memory already has a different "
+                    "identity key"
+                )
+
     async def list_memories(
         self,
         *,
@@ -331,6 +393,123 @@ class SQLiteMemoryRepository:
                 )
 
                 await session.flush()
+
+                session.add(
+                    revision_to_row(
+                        new_revision
+                    )
+                )
+
+    async def reactivate_memory(
+        self,
+        memory_id: UUID,
+        new_revision: MemoryRevision,
+    ) -> None:
+        """
+        为 latest revision 已 EXPIRED 的 logical Memory
+        原子追加新的 ACTIVE revision。
+
+        不改变旧 EXPIRED revision。
+        """
+
+        if new_revision.memory_id != memory_id:
+            raise ValueError(
+                "New revision memory_id "
+                "must match target memory_id"
+            )
+
+        if (
+            new_revision.lifecycle
+            is not MemoryLifecycle.ACTIVE
+        ):
+            raise ValueError(
+                "Reactivated revision must be ACTIVE"
+            )
+
+        async with self._session_factory() as session:
+            async with session.begin():
+                memory_row = await session.get(
+                    MemoryRow,
+                    str(memory_id),
+                )
+
+                if memory_row is None:
+                    raise ValueError(
+                        "Memory does not exist"
+                    )
+
+                active_statement = (
+                    select(MemoryRevisionRow)
+                    .where(
+                        MemoryRevisionRow.memory_id
+                        == str(memory_id),
+                        MemoryRevisionRow.lifecycle
+                        == MemoryLifecycle.ACTIVE.value,
+                    )
+                )
+
+                active_result = await session.execute(
+                    active_statement
+                )
+
+                if (
+                    active_result.scalars()
+                    .one_or_none()
+                    is not None
+                ):
+                    raise ValueError(
+                        "Memory already has "
+                        "an ACTIVE revision"
+                    )
+
+                latest_statement = (
+                    select(MemoryRevisionRow)
+                    .where(
+                        MemoryRevisionRow.memory_id
+                        == str(memory_id)
+                    )
+                    .order_by(
+                        MemoryRevisionRow
+                        .revision_number
+                        .desc()
+                    )
+                    .limit(1)
+                )
+
+                latest_result = await session.execute(
+                    latest_statement
+                )
+
+                latest_row = (
+                    latest_result.scalars()
+                    .one_or_none()
+                )
+
+                if latest_row is None:
+                    raise ValueError(
+                        "Memory has no revisions"
+                    )
+
+                if (
+                    latest_row.lifecycle
+                    != MemoryLifecycle.EXPIRED.value
+                ):
+                    raise ValueError(
+                        "Latest revision must be EXPIRED"
+                    )
+
+                expected_revision_number = (
+                    latest_row.revision_number + 1
+                )
+
+                if (
+                    new_revision.revision_number
+                    != expected_revision_number
+                ):
+                    raise ValueError(
+                        "New revision_number must be "
+                        f"{expected_revision_number}"
+                    )
 
                 session.add(
                     revision_to_row(

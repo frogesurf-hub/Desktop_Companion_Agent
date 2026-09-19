@@ -1372,6 +1372,295 @@ async def _exercise_rejects_duplicate_character_identity(
         await engine.dispose()
 
 
+async def _exercise_adopt_identity_key(
+    database_path: Path,
+) -> None:
+    engine, repository = (
+        await _build_repository(
+            database_path
+        )
+    )
+
+    try:
+        memory = Memory(
+            memory_id=_MEMORY_ID,
+            domain=MemoryDomain.USER_PROFILE,
+            scope=MemoryScope(
+                kind=MemoryScopeKind.GLOBAL_USER,
+            ),
+        )
+
+        revision = MemoryRevision(
+            memory_id=_MEMORY_ID,
+            revision_number=1,
+            content="The user prefers C#.",
+            source=MemorySource.USER_EXPLICIT,
+            lifecycle=MemoryLifecycle.ACTIVE,
+            recorded_at=datetime.now(UTC),
+        )
+
+        await repository.create_memory(
+            memory,
+            revision,
+        )
+
+        identity_key = MemoryIdentityKey(
+            "user_profile.preference.programming_language"
+        )
+
+        await repository.adopt_identity_key(
+            _MEMORY_ID,
+            identity_key,
+        )
+
+        loaded = await repository.get_memory(
+            _MEMORY_ID
+        )
+
+        assert loaded is not None
+        assert loaded.identity_key == identity_key
+
+        # same key is intentionally idempotent
+        await repository.adopt_identity_key(
+            _MEMORY_ID,
+            identity_key,
+        )
+
+    finally:
+        await engine.dispose()
+
+
+def test_sqlite_repository_adopts_identity_key(
+    tmp_path: Path,
+) -> None:
+    asyncio.run(
+        _exercise_adopt_identity_key(
+            tmp_path / "memory.db"
+        )
+    )
+
+async def _exercise_rejects_identity_reassignment(
+    database_path: Path,
+) -> None:
+    engine, repository = (
+        await _build_repository(
+            database_path
+        )
+    )
+
+    try:
+        original_key = MemoryIdentityKey(
+            "user_profile.preference.programming_language"
+        )
+
+        memory = Memory(
+            memory_id=_MEMORY_ID,
+            domain=MemoryDomain.USER_PROFILE,
+            scope=MemoryScope(
+                kind=MemoryScopeKind.GLOBAL_USER,
+            ),
+            identity_key=original_key,
+        )
+
+        revision = MemoryRevision(
+            memory_id=_MEMORY_ID,
+            revision_number=1,
+            content="The user prefers C#.",
+            source=MemorySource.USER_EXPLICIT,
+            lifecycle=MemoryLifecycle.ACTIVE,
+            recorded_at=datetime.now(UTC),
+        )
+
+        await repository.create_memory(
+            memory,
+            revision,
+        )
+
+        with pytest.raises(
+            ValueError,
+            match="different identity key",
+        ):
+            await repository.adopt_identity_key(
+                _MEMORY_ID,
+                MemoryIdentityKey(
+                    "user_profile.preference.editor"
+                ),
+            )
+
+        loaded = await repository.get_memory(
+            _MEMORY_ID
+        )
+
+        assert loaded is not None
+        assert loaded.identity_key == original_key
+
+    finally:
+        await engine.dispose()
+
+
+async def _exercise_reactivate_expired_memory(
+    database_path: Path,
+) -> None:
+    engine, repository = (
+        await _build_repository(
+            database_path
+        )
+    )
+
+    try:
+        memory = Memory(
+            memory_id=_MEMORY_ID,
+            domain=MemoryDomain.WORKING_CONTEXT,
+            scope=MemoryScope(
+                kind=MemoryScopeKind.GLOBAL_USER,
+            ),
+            identity_key=MemoryIdentityKey(
+                "working_context.project.desktop_companion"
+            ),
+        )
+
+        first_revision = MemoryRevision(
+            memory_id=_MEMORY_ID,
+            revision_number=1,
+            content="Working on Phase 4.",
+            source=MemorySource.AUTOMATIC_EXPLICIT_FACT,
+            lifecycle=MemoryLifecycle.ACTIVE,
+            recorded_at=datetime.now(UTC),
+        )
+
+        await repository.create_memory(
+            memory,
+            first_revision,
+        )
+
+        await repository.expire_active_revision(
+            _MEMORY_ID,
+            1,
+        )
+
+        second_revision = MemoryRevision(
+            memory_id=_MEMORY_ID,
+            revision_number=2,
+            content="Working on Phase 4 Task 7.",
+            source=MemorySource.AUTOMATIC_EXPLICIT_FACT,
+            lifecycle=MemoryLifecycle.ACTIVE,
+            recorded_at=datetime.now(UTC),
+        )
+
+        await repository.reactivate_memory(
+            _MEMORY_ID,
+            second_revision,
+        )
+
+        active = (
+            await repository.get_active_revision(
+                _MEMORY_ID
+            )
+        )
+
+        revisions = (
+            await repository.list_revisions(
+                _MEMORY_ID
+            )
+        )
+
+        assert active == second_revision
+
+        assert len(revisions) == 2
+        assert (
+            revisions[0].lifecycle
+            is MemoryLifecycle.EXPIRED
+        )
+        assert revisions[1] == second_revision
+
+    finally:
+        await engine.dispose()
+
+
+async def _exercise_reactivate_rejects_active_memory(
+    database_path: Path,
+) -> None:
+    engine, repository = (
+        await _build_repository(
+            database_path
+        )
+    )
+
+    try:
+        memory = Memory(
+            memory_id=_MEMORY_ID,
+            domain=MemoryDomain.WORKING_CONTEXT,
+            scope=MemoryScope(
+                kind=MemoryScopeKind.GLOBAL_USER,
+            ),
+        )
+
+        first_revision = MemoryRevision(
+            memory_id=_MEMORY_ID,
+            revision_number=1,
+            content="Still active.",
+            source=MemorySource.USER_EXPLICIT,
+            lifecycle=MemoryLifecycle.ACTIVE,
+            recorded_at=datetime.now(UTC),
+        )
+
+        await repository.create_memory(
+            memory,
+            first_revision,
+        )
+
+        second_revision = MemoryRevision(
+            memory_id=_MEMORY_ID,
+            revision_number=2,
+            content="Invalid reactivation.",
+            source=MemorySource.AUTOMATIC_EXPLICIT_FACT,
+            lifecycle=MemoryLifecycle.ACTIVE,
+            recorded_at=datetime.now(UTC),
+        )
+
+        with pytest.raises(
+            ValueError,
+            match="already has an ACTIVE revision",
+        ):
+            await repository.reactivate_memory(
+                _MEMORY_ID,
+                second_revision,
+            )
+
+    finally:
+        await engine.dispose()
+
+
+def test_sqlite_repository_reactivate_rejects_active_memory(
+    tmp_path: Path,
+) -> None:
+    asyncio.run(
+        _exercise_reactivate_rejects_active_memory(
+            tmp_path / "memory.db"
+        )
+    )
+
+
+def test_sqlite_repository_reactivates_expired_memory(
+    tmp_path: Path,
+) -> None:
+    asyncio.run(
+        _exercise_reactivate_expired_memory(
+            tmp_path / "memory.db"
+        )
+    )
+
+
+def test_sqlite_repository_rejects_identity_reassignment(
+    tmp_path: Path,
+) -> None:
+    asyncio.run(
+        _exercise_rejects_identity_reassignment(
+            tmp_path / "memory.db"
+        )
+    )
+
+
 def test_database_rejects_duplicate_character_identity(
     tmp_path: Path,
 ) -> None:
