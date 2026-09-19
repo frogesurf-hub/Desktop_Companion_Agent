@@ -3,8 +3,8 @@
 Status: Active Implementation Baseline
 Phase: 4 — Memory System
 Task: 7 — Controlled Automatic Memory Learning
-Current committed baseline: `843be83 feat(memory): add automatic memory learning service`
-Current working increment: Task 7D3 — Inactive / Legacy Closure
+Implementation baseline before Task 7E2 checkpoint: `ff49fae feat(memory): add llm memory candidate extractor`
+Current implementation status: Task 7E completed; Task 7F is next
 
 ---
 
@@ -78,8 +78,8 @@ Task 7 must preserve the accepted Phase 4 architecture:
 - unsupported inference must not enter factual User Profile;
 - Memory must not grant Tool / Permission authority;
 - Task 8 remains responsible for runtime failure-isolation behavior;
-- user-governance deletion must not be silently undone by ordinary automatic learning.
-- Memory use cases depend on persistence contracts rather than directly on SQLite;
+- user-governance deletion must not be silently undone by ordinary automatic learning;
+- Memory use cases depend on persistence contracts rather than directly on SQLite.
 
 The implementation must reuse existing domain contracts instead of redesigning them.
 
@@ -114,6 +114,7 @@ PreparedMemoryContext
 MemoryLearningInput
 MemoryCandidate
 MemoryCandidateExtractor
+LLMMemoryCandidateExtractor
 MemoryLearningPolicy
 MemoryEligibilityResult
 ExistingMemoryResolver
@@ -121,6 +122,7 @@ ExistingMemoryResolution
 MemoryLearningService
 MemoryLearningResult
 
+LLMProvider
 Clock / SystemClock
 
 Agent
@@ -258,7 +260,7 @@ MemoryLearningPolicy
 → deterministic provenance / scope boundary
 ```
 
-Semantic questions such as whether text is speculative, inferred, fictional, or explicit remain owned by the concrete Extractor in Task 7E.
+Semantic questions such as whether text is speculative, inferred, fictional, or explicit belong to Candidate Extraction.
 
 ---
 
@@ -492,49 +494,71 @@ The automatic-learning service depends on capabilities, not on SQLAlchemy.
 
 `MemoryCandidateExtractor` converts runtime learning input into zero or more `MemoryCandidate` objects.
 
-Conceptual contract:
+Concrete Task 7 implementation:
 
 ```text
 MemoryLearningInput
     ↓
-MemoryCandidateExtractor
+LLMMemoryCandidateExtractor
     ↓
-tuple[MemoryCandidate, ...]
+LLMProvider
+provider-neutral semantic extraction
+    ↓
+strict structured payload validation
+    ↓
+MemoryCandidate[]
+```
+
+The LLM is allowed to propose only:
+
+```text
+content
+domain
+identity_key
+```
+
+The following remain locally controlled:
+
+```text
+candidate_id
+source
+source_message_id
+scope / character_id
+created_at
+occurred_at
+persistence authority
 ```
 
 The Extractor:
 
 - identifies explicit candidate facts;
 - selects supported Memory domain;
-- assigns valid scope;
-- assigns `AUTOMATIC_EXPLICIT_FACT`;
-- assigns identity key when a stable logical slot exists;
+- proposes a stable semantic identity key when appropriate;
+- never grants itself durable persistence authority;
+- constructs Relationship scope from the local active Character;
+- assigns `AUTOMATIC_EXPLICIT_FACT` locally;
+- uses `Clock.now()` for Candidate creation time;
+- does not reinterpret conversation time as event occurrence time;
 - does not persist;
 - does not resolve conflicts;
 - does not call `SQLiteMemoryRepository`.
 
-Concrete extraction remains Task 7E.
+Invalid structured output fails closed through `MemoryCandidateExtractionError`.
 
 ---
 
 ## 13. Extraction Strategy for Task 7
 
-Implementation order remains:
-
-```text
-stable contract first
-    ↓
-replaceable concrete extractor second
-```
-
-If LLM-assisted extraction is used:
+Task 7 uses a replaceable **LLM-assisted, provider-neutral Extractor** behind `MemoryCandidateExtractor`.
 
 ```text
 LLM output
 ≠ confirmed Memory
 ```
 
-It must still pass through:
+The LLM only performs semantic candidate extraction.
+
+Every returned Candidate must still pass through:
 
 ```text
 Candidate
@@ -546,6 +570,58 @@ Candidate
 ```
 
 No extractor receives unrestricted direct persistence authority.
+
+### 13.1 Structured-output boundary
+
+Task 7 does not expand the Phase 1 `LLMProvider` contract solely for Memory extraction.
+
+The Extractor therefore:
+
+- requests JSON-only output through its system prompt;
+- validates the result with a strict local Pydantic schema;
+- forbids unknown fields;
+- rejects unknown Memory domains;
+- rejects model attempts to provide authority fields such as `source` or `character_id`.
+
+Provider-level structured-output APIs remain a future option only if justified by a broader provider contract requirement.
+
+### 13.2 Canonical logical identity
+
+ADR 0020 requires a stable semantic slot across paraphrases.
+
+The Extractor prompt therefore requires identity keys to be generated from the semantic slot rather than surface wording.
+
+Conceptually:
+
+```text
+different wording
+    ↓
+same semantic slot
+    ↓
+same MemoryIdentityKey
+```
+
+Meaningful context must remain part of the slot when it changes the fact's identity.
+
+Example accepted canonical slot:
+
+```text
+user_profile.preference.game_development.programming_language
+```
+
+This allows the system to distinguish:
+
+```text
+general programming-language preference
+```
+
+from:
+
+```text
+game-development programming-language preference
+```
+
+without encoding the current value (`C#`, `Rust`, etc.) into the key.
 
 ---
 
@@ -656,7 +732,7 @@ Key behavior:
 
 ### Task 7D — Learning Service + Durable Recording
 
-Status: Completed — ready for checkpoint
+Status: Completed
 
 #### Task 7D1 — Learning persistence primitives
 
@@ -680,7 +756,7 @@ REPLACED
 
 #### Task 7D3 — Inactive / Legacy closure
 
-implemented:
+Completed:
 
 ```text
 IDENTITY_ADOPTED
@@ -689,40 +765,95 @@ BLOCKED_DELETED
 unsupported SUPERSEDED latest → state error
 ```
 
-Targeted validation at current working state:
+### Task 7E — Concrete Candidate Extraction
+
+Status: Completed
+
+#### Task 7E1 — Provider-backed Extractor + strict parsing
+
+Completed:
+
+- `LLMMemoryCandidateExtractor`;
+- provider-neutral dependency through `LLMProvider`;
+- strict local Pydantic structured-output validation;
+- unknown fields rejected;
+- unknown domains rejected;
+- model authority fields rejected;
+- local provenance / scope / timestamp / Candidate ID assignment;
+- no direct persistence access.
+
+Unit validation after implementation:
 
 ```text
-63 passed
+22 targeted tests passed
 Ruff: passed
-mypy: passed (92 source files)
+mypy: passed (94 source files)
 git diff --check: clean
 ```
 
-Task 7D3 — Inactive / Legacy closure
-Status: Completed
+Task 7E1 checkpoint:
 
-D3 is complete after staged review, commit, and push.
+```text
+ff49fae feat(memory): add llm memory candidate extractor
+```
 
-### Task 7E — Concrete Candidate Extraction
+#### Task 7E2 — Real DeepSeek semantic acceptance
 
-Status: Pending
+Completed.
 
-Goals:
+Real DeepSeek acceptance covered:
 
-- implement initial replaceable extractor;
-- prioritize explicit / high-certainty factual statements;
-- avoid unsupported inference;
-- assign supported domain, scope, provenance and logical identity;
-- produce only transient Candidate objects.
+```text
+explicit preference
+current working context
+completed episodic event
+Relationship fact
+uncertain / speculative statement
+assistant-only claimed user fact
+paraphrased identity stability
+```
 
-Required coverage includes:
+Observed accepted behavior:
 
-- explicit preference;
-- explicit user fact;
-- explicit durable project/context;
-- explicit episodic fact;
-- Relationship fact with active Character scope;
-- speculative / inferred statements not emitted as factual Memory.
+```text
+explicit preference
+→ USER_PROFILE
+
+current project / progress
+→ WORKING_CONTEXT
+
+completed event
+→ EPISODIC
+
+shared history with active Character
+→ RELATIONSHIP
+→ CHARACTER(active_character_id)
+
+uncertain future Rust interest
+→ no Candidate
+
+fact asserted only by assistant
+→ no Candidate
+```
+
+Initial semantic acceptance exposed unstable identity keys across two paraphrases of the same game-development language preference.
+
+The Extractor prompt was then refined to require canonical semantic-slot identity generation.
+
+Repeated real DeepSeek acceptance produced the same key for both paraphrases:
+
+```text
+user_profile.preference.game_development.programming_language
+```
+
+Final local validation after prompt refinement:
+
+```text
+5 extractor tests passed
+Ruff: passed
+mypy: passed (94 source files)
+git diff --check: clean
+```
 
 ### Task 7F — Runtime + Settings Integration
 
@@ -767,6 +898,7 @@ src/agent_core/memory/
 │   ├── __init__.py
 │   ├── models.py
 │   ├── extractor.py
+│   ├── llm_extractor.py
 │   ├── policy.py
 │   ├── resolver.py
 │   └── service.py
@@ -784,7 +916,7 @@ src/agent_core/memory/
 └── retrieval_service.py
 ```
 
-Later Task 7F integration may affect:
+Task 7F integration may affect:
 
 ```text
 src/agent_core/core/agent.py
@@ -827,6 +959,12 @@ Legacy identity adoption
 EXPIRED reactivation
 DELETED automatic-resurrection blocking
 Invalid latest lifecycle rejection
+
+LLM structured-output validation
+Unknown-domain rejection
+Model authority-field rejection
+Real-provider semantic extraction
+Paraphrase-stable identity key
 
 Automatic-learning enabled
 Automatic-learning disabled
@@ -898,16 +1036,21 @@ Task 7 is complete when all of the following are true:
     by ordinary automatic learning.
 13. Duplicate Candidates do not create unnecessary duplicate Memory.
 14. Relationship Memory respects active Character scope.
-15. Automatic learning can be disabled without disabling Retrieval/Governance.
-16. Newly learned Memory is available to later Retrieval.
-17. Existing Agent / Provider / Character / Composer boundaries remain intact.
-18. Targeted tests, Ruff, mypy and diff checks pass.
-19. Final staged diff is reviewed before commit.
-20. Task 7 receives clear commits and is pushed to the remote repository.
+15. Concrete extraction is replaceable behind `MemoryCandidateExtractor`.
+16. LLM extraction cannot directly control provenance, Character scope, timestamps, lifecycle, or persistence.
+17. Canonical logical identity is stable across validated paraphrases.
+18. Automatic learning can be disabled without disabling Retrieval/Governance.
+19. Newly learned Memory is available to later Retrieval.
+20. Existing Agent / Provider / Character / Composer boundaries remain intact.
+21. Targeted tests, Ruff, mypy and diff checks pass.
+22. Final staged diff is reviewed before commit.
+23. Task 7 receives clear commits and is pushed to the remote repository.
+
+Task 7 is not complete until Task 7F satisfies criteria 18–20.
 
 ---
 
-## 21. Actual Commit Progression
+## 21. Confirmed Commit Progression Before Current Checkpoint
 
 Current confirmed Task 7 commits:
 
@@ -920,15 +1063,17 @@ ca351db  feat(memory): add logical memory identity keys
 f2d15ba  feat(memory): add existing memory resolver
 066a9dd  feat(memory): add learning persistence primitives
 843be83  feat(memory): add automatic memory learning service
+39da336  feat(memory): close automatic learning lifecycle states
+ff49fae  feat(memory): add llm memory candidate extractor
 ```
 
-Suggested next checkpoint for Task 7D3:
+Suggested Task 7E2 checkpoint message:
 
 ```text
-feat(memory): close automatic learning lifecycle states
+feat(memory): stabilize candidate identity extraction
 ```
 
-Task 7E and Task 7F should continue with separate reviewable commits.
+Task 7F should remain a separate reviewable commit.
 
 ---
 
@@ -949,7 +1094,7 @@ ADR 0018
 ADR 0020
 ```
 
-Task 7D lifecycle behavior is consistent with ADR 0016:
+Task 7D lifecycle behavior remains consistent with ADR 0016:
 
 ```text
 ACTIVE
@@ -958,12 +1103,15 @@ EXPIRED
 DELETED
 ```
 
-Task 7 does not require a new ADR solely for the D3 implementation because:
+Task 7E canonical identity refinement implements the existing ADR 0020 requirement that a `MemoryIdentityKey` represent a stable semantic factual slot. It does not introduce a new architecture decision and therefore does not require a new ADR.
 
-- logical identity is already owned by ADR 0020;
-- lifecycle / delete semantics are already owned by ADR 0016;
-- D3 defines how the accepted Task 7 learning use case applies those existing decisions.
+If later product requirements change:
 
-If later product requirements change deleted-Memory recovery semantics, that change should receive an explicit architecture / owner decision before implementation.
+- deleted-Memory recovery semantics;
+- Provider structured-output contracts;
+- semantic identity ownership;
+- extraction model authority;
+
+that change should receive an explicit architecture / owner decision before implementation.
 
 Current repository source remains the highest-priority engineering baseline.

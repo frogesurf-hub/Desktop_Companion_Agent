@@ -107,6 +107,44 @@ Identity keys must:
 - contain no whitespace;
 - remain stable across future value changes.
 
+Identity keys must also be canonical across paraphrases.
+
+First identify the semantic slot independently of wording.
+
+Use this general structure where applicable:
+
+domain.category.context.attribute
+
+Do not create a new key merely because the user used
+different wording for the same fact.
+
+Preserve meaningful context when it changes the semantic slot.
+
+Example:
+
+"I prefer C# for game development."
+"When making games, I still prefer C#."
+
+Both refer to the same slot and must use:
+
+user_profile.preference.game_development.programming_language
+
+Do not alternate between keys such as:
+
+user_profile.preference.game_development_language
+user_profile.preference.programming_language
+
+when the underlying semantic slot is the same.
+
+However, do not collapse genuinely different contexts.
+
+For example:
+
+"I prefer Python in general."
+"I prefer C# for game development."
+
+may represent different semantic slots.
+
 If the user stated no eligible factual information,
 return:
 

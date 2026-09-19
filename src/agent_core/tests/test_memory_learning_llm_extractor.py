@@ -208,6 +208,17 @@ def test_llm_extractor_builds_supported_candidates(
         in request.messages[1].content
     )
 
+    assert (
+        "canonical across paraphrases"
+        in request.messages[0].content
+    )
+
+    assert (
+        "user_profile.preference."
+        "game_development.programming_language"
+        in request.messages[0].content
+    )
+
 
 def test_llm_extractor_returns_empty_tuple(
 ) -> None:
