@@ -1,6 +1,10 @@
 from agent_core.memory.learning.extractor import (
     MemoryCandidateExtractor,
 )
+from agent_core.memory.learning.llm_extractor import (
+    LLMMemoryCandidateExtractor,
+    MemoryCandidateExtractionError,
+)
 from agent_core.memory.learning.models import (
     MemoryCandidate,
     MemoryLearningInput,
@@ -46,4 +50,6 @@ __all__ = [
     "MemoryLearningResult",
     "MemoryLearningService",
     "MemoryLearningStateError",
+    "LLMMemoryCandidateExtractor",
+    "MemoryCandidateExtractionError",
 ]
