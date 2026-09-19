@@ -4,6 +4,7 @@ from uuid import UUID
 
 from agent_core.memory.models import (
     MemoryDomain,
+    MemoryIdentityKey,
     MemoryScope,
     MemorySource,
 )
@@ -104,6 +105,7 @@ class MemoryCandidate:
     source: MemorySource
     source_message_id: str
     created_at: datetime
+    identity_key: MemoryIdentityKey | None = None
     occurred_at: datetime | None = None
 
     def __post_init__(self) -> None:

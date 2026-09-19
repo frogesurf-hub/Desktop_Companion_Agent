@@ -43,3 +43,4 @@ Phase 4 ADRs:
 - `0017-sqlite-default-durable-memory-source-of-truth.md`
 - `0018-memory-explicit-failure-isolated-boundaries.md`
 - `0019-adaptive-runtime-behavior-decision-and-capability-boundaries.md`
+- `0020-logical-memory-identity-key.md`

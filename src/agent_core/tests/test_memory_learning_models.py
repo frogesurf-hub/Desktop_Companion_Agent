@@ -10,6 +10,7 @@ from agent_core.memory.learning import (
 )
 from agent_core.memory.models import (
     MemoryDomain,
+    MemoryIdentityKey,
     MemoryScope,
     MemoryScopeKind,
     MemorySource,
@@ -129,6 +130,9 @@ def test_memory_candidate_preserves_memory_semantics() -> None:
         source_message_id="message-1",
         created_at=_TIMESTAMP,
         occurred_at=_TIMESTAMP,
+        identity_key=MemoryIdentityKey(
+            "user_profile.preference.programming_language"
+        ),
     )
 
     assert candidate.content == (
@@ -143,6 +147,9 @@ def test_memory_candidate_preserves_memory_semantics() -> None:
     assert candidate.created_at.tzinfo is UTC
     assert candidate.occurred_at is not None
     assert candidate.occurred_at.tzinfo is UTC
+    assert candidate.identity_key == MemoryIdentityKey(
+        "user_profile.preference.programming_language"
+    )
 
 
 def test_memory_candidate_rejects_empty_content() -> None:

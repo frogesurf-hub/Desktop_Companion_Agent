@@ -205,6 +205,7 @@ scope
 source
 source_message_id
 created_at
+identity_key (optional)
 occurred_at (optional)
 ```
 
@@ -276,7 +277,8 @@ This avoids introducing an unnecessary table, migration, repository, lifecycle a
 
 ## 8. Eligibility Policy
 
-Task 7 needs a deterministic policy boundary that decides whether a Candidate is allowed to proceed.
+Task 7 needs a deterministic policy boundary that decides whether a Candidate
+is allowed to proceed.
 
 The Eligibility Policy performs deterministic admission checks after
 Candidate extraction.
@@ -289,8 +291,8 @@ Initial rejection conditions:
 - Relationship Memory targets a Character other than the active Character.
 
 Semantic questions such as whether a statement is explicit, speculative,
-inferred from repetition, psychological interpretation, or Character
-fiction belong to Candidate Extraction in Task 7E.
+inferred from repetition, psychological interpretation, or Character fiction
+belong to Candidate Extraction in Task 7E.
 
 Therefore:
 
@@ -300,26 +302,22 @@ Extractor
 
 Eligibility Policy
 → deterministic provenance / scope boundary
-
-Initial rejection targets:
-
-- speculative personality inference;
-- emotional or psychological diagnosis;
-- unsupported preference inference;
-- conclusions inferred only from repetition/frequency;
-- Character fiction presented as real-user fact;
-- empty or structurally invalid content;
-- scope/domain combinations rejected by existing Memory domain rules.
+```
 
 Conceptual boundary:
 
 ```text
+MemoryCandidate
++
+MemoryLearningInput
+    ↓
 MemoryLearningPolicy
-    input: MemoryCandidate
-    output: eligibility result
+    ↓
+MemoryEligibilityResult
 ```
 
-The policy does not persist Memory.
+The Eligibility Policy does not interpret natural language and does not
+persist Memory.
 
 ---
 
@@ -604,6 +602,25 @@ Expected verification:
 - existing logical fact found;
 - domain/scope isolation;
 - Relationship Character isolation.
+
+Task 7C uses an optional semantic `MemoryIdentityKey` to represent the
+stable logical identity of a factual slot.
+
+Conceptually:
+
+```text
+MemoryCandidate
+domain + scope + identity_key
+        ↓
+Existing Memory Resolution
+        ↓
+same logical Memory
+```
+
+The identity key belongs to logical Memory rather than Revision content.
+
+Keyless or legacy Memory may still participate in exact-content duplicate
+detection, but semantic fuzzy matching is not introduced in Phase 4.
 
 The first matching algorithm should be deliberately simple and deterministic unless a stronger mechanism is justified during implementation.
 

@@ -49,6 +49,50 @@ class MemorySource(Enum):
     SYSTEM_OBSERVED = "system_observed"
 
 
+@dataclass(
+    frozen=True,
+    slots=True,
+)
+class MemoryIdentityKey:
+    """
+    一条逻辑 Memory 的稳定语义身份键。
+
+    memory_id 是数据库稳定身份；
+    identity key 用于 Automatic Learning 判断
+    新 Candidate 是否指向同一个逻辑事实。
+    """
+
+    value: str
+
+    def __post_init__(self) -> None:
+        normalized = self.value.strip().casefold()
+
+        if not normalized:
+            raise ValueError(
+                "MemoryIdentityKey must not be empty"
+            )
+
+        if len(normalized) > 256:
+            raise ValueError(
+                "MemoryIdentityKey must not exceed "
+                "256 characters"
+            )
+
+        if any(
+            character.isspace()
+            for character in normalized
+        ):
+            raise ValueError(
+                "MemoryIdentityKey must not contain whitespace"
+            )
+
+        object.__setattr__(
+            self,
+            "value",
+            normalized,
+        )
+
+
 def _normalize_aware_datetime(
     field_name: str,
     value: datetime,
@@ -126,6 +170,7 @@ class Memory:
     memory_id: UUID
     domain: MemoryDomain
     scope: MemoryScope
+    identity_key: MemoryIdentityKey | None = None
 
     def __post_init__(self) -> None:
         """

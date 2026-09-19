@@ -9,6 +9,7 @@ from agent_core.memory.governance import (
 from agent_core.memory.models import (
     Memory,
     MemoryDomain,
+    MemoryIdentityKey,
     MemoryLifecycle,
     MemoryRevision,
     MemoryScope,
@@ -42,5 +43,6 @@ __all__ = [
     "MemoryRetrievalLimits",
     "MemoryRetrievalPolicy",
     "MemoryRetrievalService",
+    "MemoryIdentityKey",
 
 ]

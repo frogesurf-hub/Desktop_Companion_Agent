@@ -7,6 +7,7 @@ import pytest
 from agent_core.memory import (
     Memory,
     MemoryDomain,
+    MemoryIdentityKey,
     MemoryLifecycle,
     MemoryRevision,
     MemoryScope,
@@ -17,6 +18,48 @@ from agent_core.memory import (
 _MEMORY_ID = UUID(
     "12345678-1234-5678-1234-567812345678"
 )
+
+
+def test_memory_identity_key_normalizes_value() -> None:
+    identity_key = MemoryIdentityKey(
+        "  USER_PROFILE.Preference.Language  "
+    )
+
+    assert identity_key.value == (
+        "user_profile.preference.language"
+    )
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        "",
+        "   ",
+        "user profile.preference",
+    ],
+)
+def test_memory_identity_key_rejects_invalid_value(
+    value: str,
+) -> None:
+    with pytest.raises(ValueError):
+        MemoryIdentityKey(
+            value,
+        )
+
+
+def test_memory_preserves_identity_key() -> None:
+    identity_key = MemoryIdentityKey(
+        "user_profile.preference.programming_language"
+    )
+
+    memory = Memory(
+        memory_id=_MEMORY_ID,
+        domain=MemoryDomain.USER_PROFILE,
+        scope=_global_scope(),
+        identity_key=identity_key,
+    )
+
+    assert memory.identity_key == identity_key
 
 
 def _global_scope() -> MemoryScope:
