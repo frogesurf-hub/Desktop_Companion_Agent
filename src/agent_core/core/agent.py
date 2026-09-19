@@ -136,6 +136,7 @@ class Agent:
 
             memory_context = await self._memory_retriever.retrieve(
                 user_text,
+                character_id=self._character.character_id,
             )
 
             request = self._composer.compose(

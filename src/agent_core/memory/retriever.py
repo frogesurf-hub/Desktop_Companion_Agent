@@ -15,16 +15,24 @@ class MemoryRetriever(Protocol):
     async def retrieve(
         self,
         query: str,
+        *,
+        character_id: str,
     ) -> PreparedMemoryContext:
         """
-        Retrieve prepared memory context.
+        Retrieve prepared factual Memory context.
 
         Args:
             query:
                 Current user input or retrieval hint.
 
+            character_id:
+                Current active Character identity.
+                Used only for Character-scoped
+                Relationship Memory isolation.
+
         Returns:
             PreparedMemoryContext:
-                Factual memory context prepared for composition.
+                Factual Memory context prepared
+                for prompt composition.
         """
         ...

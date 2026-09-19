@@ -103,13 +103,20 @@ class FakeMemoryRetriever:
     ) -> None:
         self._context = context
         self.queries: list[str] = []
+        self.character_ids: list[str] = []
 
     async def retrieve(
         self,
         query: str,
+        *,
+        character_id: str,
     ) -> PreparedMemoryContext:
         self.queries.append(
             query,
+        )
+
+        self.character_ids.append(
+            character_id,
         )
 
         return self._context

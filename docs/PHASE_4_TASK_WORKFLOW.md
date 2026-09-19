@@ -395,17 +395,15 @@ Memory 不负责：
 
 # 5. Next Starting Point
 
-下一任务：
+Task6: Completed
 
-Task 6
+Current capability:
+User Input
+→ Agent
+→ Memory Retrieval
+→ PreparedMemoryContext
+→ PromptContextComposer
+→ Provider
 
-开始前必须确认：
-
-1.  当前 Agent Core 结构
-2.  Composer 当前实现
-3.  Context 生成流程
-4.  Memory 注入位置
-
-然后进入设计。
-
-禁止直接修改代码。
+Next:
+Task7 - Automatic Learning Pipeline
