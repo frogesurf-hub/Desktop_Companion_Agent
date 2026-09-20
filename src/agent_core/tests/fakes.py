@@ -12,6 +12,9 @@ from agent_core.memory.learning import (
     MemoryTurnLearner,
 )
 from agent_core.memory.retrieval import PreparedMemoryContext
+from agent_core.memory.retriever import (
+    MemoryRetriever,
+)
 from agent_core.providers import (
     LLMProvider,
     LLMProviderError,
@@ -149,17 +152,19 @@ def create_test_agent(
     provider: LLMProvider,
     *,
     memory_context: PreparedMemoryContext | None = None,
+    memory_retriever: MemoryRetriever | None = None,
     memory_learner: MemoryTurnLearner | None = None,
 ) -> Agent:
     """
     创建具备完整 Phase 3 Runtime dependencies 的测试 Agent。
     """
-    if memory_context is None:
-        memory_context = PreparedMemoryContext()
+    if memory_retriever is None:
+        if memory_context is None:
+            memory_context = PreparedMemoryContext()
 
-    memory_retriever = FakeMemoryRetriever(
-        memory_context,
-    )
+        memory_retriever = FakeMemoryRetriever(
+            memory_context,
+        )
 
     return Agent(
         provider=provider,

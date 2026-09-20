@@ -24,6 +24,9 @@ from agent_core.memory.models import (
     MemorySource,
 )
 from agent_core.memory.repository import MemoryRepository
+from agent_core.memory.resilient_retriever import (
+    ResilientMemoryRetriever,
+)
 from agent_core.memory.retrieval_policy import (
     MemoryRetrievalLimits,
     MemoryRetrievalPolicy,
@@ -56,4 +59,5 @@ __all__ = [
     "MemoryHealthSnapshot",
     "MemoryHealthStatus",
     "MemoryHealthTracker",
+    "ResilientMemoryRetriever",
 ]
