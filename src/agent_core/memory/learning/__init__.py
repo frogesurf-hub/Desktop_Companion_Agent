@@ -30,6 +30,10 @@ from agent_core.memory.learning.service import (
     MemoryLearningService,
     MemoryLearningStateError,
 )
+from agent_core.memory.learning.turn_learner import (
+    AutomaticMemoryTurnLearner,
+    MemoryTurnLearner,
+)
 
 __all__ = [
     "MemoryCandidate",
@@ -52,4 +56,6 @@ __all__ = [
     "MemoryLearningStateError",
     "LLMMemoryCandidateExtractor",
     "MemoryCandidateExtractionError",
+    "AutomaticMemoryTurnLearner",
+    "MemoryTurnLearner",
 ]

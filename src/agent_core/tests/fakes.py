@@ -7,6 +7,10 @@ from datetime import (
 from agent_core.characters import CharacterDefinition
 from agent_core.composition import PromptContextComposer
 from agent_core.core.agent import Agent
+from agent_core.memory.learning import (
+    MemoryLearningInput,
+    MemoryTurnLearner,
+)
 from agent_core.memory.retrieval import PreparedMemoryContext
 from agent_core.providers import (
     LLMProvider,
@@ -122,10 +126,30 @@ class FakeMemoryRetriever:
         return self._context
 
 
+class FakeMemoryTurnLearner:
+    """
+    Test-only completed-turn Memory learner.
+    """
+
+    def __init__(self) -> None:
+        self.inputs: list[
+            MemoryLearningInput
+        ] = []
+
+    async def learn_turn(
+        self,
+        learning_input: MemoryLearningInput,
+    ) -> None:
+        self.inputs.append(
+            learning_input
+        )
+
+
 def create_test_agent(
     provider: LLMProvider,
     *,
     memory_context: PreparedMemoryContext | None = None,
+    memory_learner: MemoryTurnLearner | None = None,
 ) -> Agent:
     """
     创建具备完整 Phase 3 Runtime dependencies 的测试 Agent。
@@ -160,4 +184,5 @@ def create_test_agent(
             )
         ),
         memory_retriever=memory_retriever,
+        memory_learner=memory_learner,
     )

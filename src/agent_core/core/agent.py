@@ -3,6 +3,10 @@ import logging
 from agent_core.characters import CharacterDefinition
 from agent_core.composition import PromptContextComposer
 from agent_core.core.message import Message
+from agent_core.memory.learning import (
+    MemoryLearningInput,
+    MemoryTurnLearner,
+)
 from agent_core.memory.retriever import MemoryRetriever
 from agent_core.providers import (
     LLMProvider,
@@ -106,12 +110,14 @@ class Agent:
         composer: PromptContextComposer,
         clock: Clock,
         memory_retriever: MemoryRetriever,
+        memory_learner: MemoryTurnLearner | None = None,
     ) -> None:
         self.name = name
         self._provider = provider
         self._character = character
         self._composer = composer
         self._memory_retriever = memory_retriever
+        self._memory_learner = memory_learner
         self._clock = clock
 
     async def process_message(
@@ -168,6 +174,26 @@ class Agent:
                         "code": code,
                         "message": safe_message,
                     },
+                )
+
+            if (
+                self._memory_learner is not None
+                and user_text.strip()
+            ):
+                learning_input = MemoryLearningInput(
+                    source_message_id=message.id,
+                    user_text=user_text,
+                    assistant_text=(
+                        provider_response.content
+                    ),
+                    active_character_id=(
+                        self._character.character_id
+                    ),
+                    occurred_at=current_datetime,
+                )
+
+                await self._memory_learner.learn_turn(
+                    learning_input
                 )
 
             return Message(

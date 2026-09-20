@@ -20,8 +20,77 @@ from agent_core.providers import (
 from agent_core.tests.fakes import (
     FailingLLMProvider,
     FakeLLMProvider,
+    FakeMemoryTurnLearner,
     create_test_agent,
 )
+
+
+def test_agent_runs_memory_learning_after_successful_response(
+) -> None:
+    provider = FakeLLMProvider(
+        response=LLMResponse(
+            content="记住了。",
+        ),
+    )
+
+    memory_learner = (
+        FakeMemoryTurnLearner()
+    )
+
+    agent = create_test_agent(
+        provider,
+        memory_learner=memory_learner,
+    )
+
+    message = Message(
+        id="message-1",
+        type="chat",
+        source="desktop",
+        payload={
+            "message": "我更喜欢 C#。",
+        },
+    )
+
+    response = asyncio.run(
+        agent.process_message(
+            message,
+        )
+    )
+
+    assert response.type == "response"
+
+    assert len(
+        memory_learner.inputs
+    ) == 1
+
+    learning_input = (
+        memory_learner.inputs[0]
+    )
+
+    assert (
+        learning_input.source_message_id
+        == "message-1"
+    )
+
+    assert (
+        learning_input.user_text
+        == "我更喜欢 C#。"
+    )
+
+    assert (
+        learning_input.assistant_text
+        == "记住了。"
+    )
+
+    assert (
+        learning_input.active_character_id
+        == "test"
+    )
+
+    assert (
+        learning_input.occurred_at.isoformat()
+        == "2026-09-13T12:00:00+00:00"
+    )
 
 
 def test_message_create() -> None:
@@ -248,8 +317,11 @@ def test_agent_maps_provider_error_to_safe_protocol_error(
         ),
     )
 
+    memory_learner = FakeMemoryTurnLearner()
+
     agent = create_test_agent(
         provider,
+        memory_learner=memory_learner,
     )
 
     message = Message(
@@ -276,6 +348,8 @@ def test_agent_maps_provider_error_to_safe_protocol_error(
     assert internal_diagnostic not in response.to_json()
 
     assert len(provider.requests) == 1
+
+    assert memory_learner.inputs == []
 
 
 def test_agent_rejects_unsupported_message_without_calling_provider() -> None:
