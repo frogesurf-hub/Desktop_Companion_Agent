@@ -6,6 +6,13 @@ from agent_core.memory.governance import (
     MemoryNotFoundError,
     MemoryStateError,
 )
+from agent_core.memory.health import (
+    MemoryCapability,
+    MemoryCapabilityHealth,
+    MemoryHealthSnapshot,
+    MemoryHealthStatus,
+    MemoryHealthTracker,
+)
 from agent_core.memory.models import (
     Memory,
     MemoryDomain,
@@ -44,5 +51,9 @@ __all__ = [
     "MemoryRetrievalPolicy",
     "MemoryRetrievalService",
     "MemoryIdentityKey",
-
+    "MemoryCapability",
+    "MemoryCapabilityHealth",
+    "MemoryHealthSnapshot",
+    "MemoryHealthStatus",
+    "MemoryHealthTracker",
 ]
