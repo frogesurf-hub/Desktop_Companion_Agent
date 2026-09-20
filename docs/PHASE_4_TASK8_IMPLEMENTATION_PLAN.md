@@ -1,11 +1,10 @@
 # Desktop Companion Agent — Phase 4 Task 8 Implementation Plan
 
-Status: Implementation Complete — Checkpoint Pending
+Status: Completed
 Phase: 4 — Memory System
 Task: 8 — Memory Failure Isolation & Health Behavior
-Repository baseline before Task 8E checkpoint: `3c6672e feat(memory): track governance health failures`
-Current implementation status: Task 8A–8E completed; final staged review / checkpoint remain
-
+Completion checkpoint: `15b58b1 feat(memory): wire memory health runtime`
+Current implementation status: Task 8A–8E completed and pushed
 ---
 
 ## 1. Task Goal
@@ -248,7 +247,7 @@ Checkpoint:
 
 ### Task 8E — Composition Root + Acceptance
 
-Status: Implementation Completed — Checkpoint Pending
+Status: Completed
 
 Implemented in `main.py`:
 
@@ -449,7 +448,9 @@ Task 8 implementation satisfies the intended behavior when:
 15. Targeted and full quality gates pass.
 16. Final staged diff is reviewed before checkpoint commit.
 
-Task 8 becomes formally complete after Task 8E staged review, commit, and push.
+Task 8 formally completed at checkpoint:
+
+15b58b1 feat(memory): wire memory health runtime
 
 ---
 
@@ -462,12 +463,13 @@ Confirmed commits:
 b8cea85 feat(memory): isolate memory retrieval failures
 494c536 feat(memory): isolate automatic learning failures
 3c6672e feat(memory): track governance health failures
+15b58b1 feat(memory): wire memory health runtime
 ```
 
-Current Task 8E checkpoint message:
+Task 8E completion checkpoint:
 
 ```text
-feat(memory): wire memory health runtime
+15b58b1 feat(memory): wire memory health runtime
 ```
 
 ---

@@ -44,3 +44,4 @@ Phase 4 ADRs:
 - `0018-memory-explicit-failure-isolated-boundaries.md`
 - `0019-adaptive-runtime-behavior-decision-and-capability-boundaries.md`
 - `0020-logical-memory-identity-key.md`
+- `0021-explicit-runtime-routing-for-request-response-capabilities.md`
