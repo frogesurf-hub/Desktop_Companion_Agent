@@ -14,6 +14,9 @@ from agent_core.memory.learning.policy import (
     MemoryEligibilityResult,
     MemoryLearningPolicy,
 )
+from agent_core.memory.learning.resilient_turn_learner import (
+    ResilientMemoryTurnLearner,
+)
 from agent_core.memory.learning.resolver import (
     ExistingMemoryResolution,
     ExistingMemoryResolutionError,
@@ -58,4 +61,5 @@ __all__ = [
     "MemoryCandidateExtractionError",
     "AutomaticMemoryTurnLearner",
     "MemoryTurnLearner",
+    "ResilientMemoryTurnLearner",
 ]
