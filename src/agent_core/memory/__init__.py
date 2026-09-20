@@ -1,5 +1,6 @@
 from agent_core.memory.governance import (
     MemoryDeletedError,
+    MemoryGovernance,
     MemoryGovernanceEntry,
     MemoryGovernanceError,
     MemoryGovernanceService,
@@ -12,6 +13,9 @@ from agent_core.memory.health import (
     MemoryHealthSnapshot,
     MemoryHealthStatus,
     MemoryHealthTracker,
+)
+from agent_core.memory.health_aware_governance import (
+    HealthAwareMemoryGovernanceService,
 )
 from agent_core.memory.models import (
     Memory,
@@ -45,6 +49,7 @@ __all__ = [
     "MemoryScopeKind",
     "MemorySource",
     "MemoryDeletedError",
+    "MemoryGovernance",
     "MemoryGovernanceEntry",
     "MemoryGovernanceError",
     "MemoryGovernanceService",
@@ -60,4 +65,5 @@ __all__ = [
     "MemoryHealthStatus",
     "MemoryHealthTracker",
     "ResilientMemoryRetriever",
+    "HealthAwareMemoryGovernanceService",
 ]

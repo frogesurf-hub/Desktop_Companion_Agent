@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from typing import Protocol
 from uuid import UUID
 
 from agent_core.memory.models import (
@@ -52,6 +53,48 @@ class MemoryGovernanceEntry:
 
     memory: Memory
     latest_revision: MemoryRevision
+
+
+class MemoryGovernance(Protocol):
+    """
+    Memory Governance application capability contract.
+
+    Callers depend on governance semantics rather than
+    the concrete service or persistence implementation.
+    """
+
+    async def edit_memory(
+        self,
+        memory_id: UUID,
+        new_content: str,
+    ) -> MemoryGovernanceEntry:
+        ...
+
+    async def delete_memory(
+        self,
+        memory_id: UUID,
+    ) -> MemoryGovernanceEntry:
+        ...
+
+    async def list_memories(
+        self,
+        *,
+        domain: MemoryDomain | None = None,
+        scope: MemoryScope | None = None,
+    ) -> tuple[MemoryGovernanceEntry, ...]:
+        ...
+
+    async def inspect_memory(
+        self,
+        memory_id: UUID,
+    ) -> MemoryGovernanceEntry:
+        ...
+
+    async def get_history(
+        self,
+        memory_id: UUID,
+    ) -> tuple[MemoryRevision, ...]:
+        ...
 
 
 class MemoryGovernanceService:
