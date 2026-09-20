@@ -59,6 +59,8 @@ class Settings(BaseSettings):
         "data/memory.db"
     )
 
+    automatic_learning_enabled: bool = True
+
     character_definitions_dir: Path | None = None
 
     active_character_id: str = "aria"

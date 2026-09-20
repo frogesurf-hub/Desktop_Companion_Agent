@@ -17,6 +17,16 @@ from agent_core.memory import (
     MemoryRetrievalPolicy,
     MemoryRetrievalService,
 )
+from agent_core.memory.conflict import (
+    MemoryConflictPolicy,
+)
+from agent_core.memory.learning import (
+    AutomaticMemoryTurnLearner,
+    ExistingMemoryResolver,
+    LLMMemoryCandidateExtractor,
+    MemoryLearningPolicy,
+    MemoryLearningService,
+)
 from agent_core.memory.persistence import (
     SQLiteMemoryRepository,
     create_memory_engine,
@@ -90,6 +100,45 @@ def _create_provider(
     )
 
 
+def _create_memory_learner(
+    *,
+    settings: Settings,
+    provider: DeepSeekProvider,
+    clock: SystemClock,
+    repository: SQLiteMemoryRepository,
+) -> AutomaticMemoryTurnLearner | None:
+    """
+    根据 Runtime Settings 组装 Automatic Memory Learning。
+
+    Composition Root 负责把具体组件连接起来，
+    Agent 仍只依赖 MemoryTurnLearner 边界。
+    """
+
+    if not settings.automatic_learning_enabled:
+        return None
+
+    extractor = LLMMemoryCandidateExtractor(
+        provider=provider,
+        clock=clock,
+    )
+
+    resolver = ExistingMemoryResolver(
+        repository=repository,
+    )
+
+    learning_service = MemoryLearningService(
+        repository=repository,
+        policy=MemoryLearningPolicy(),
+        resolver=resolver,
+        conflict_policy=MemoryConflictPolicy(),
+    )
+
+    return AutomaticMemoryTurnLearner(
+        extractor=extractor,
+        learning_service=learning_service,
+    )
+
+
 async def run() -> None:
     """
     初始化并运行 Desktop Companion Agent Core。
@@ -134,6 +183,7 @@ async def run() -> None:
     )
 
 
+
     logger.info(
         "Starting %s",
         settings.app_name,
@@ -166,6 +216,13 @@ async def run() -> None:
     )
 
     try:
+        memory_learner = _create_memory_learner(
+            settings=settings,
+            provider=provider,
+            clock=clock,
+            repository=memory_repository,
+        )
+
         event_bus = EventBus(
             queue_capacity=settings.event_bus_queue_capacity,
         )
@@ -177,6 +234,7 @@ async def run() -> None:
                 composer=composer,
                 clock=clock,
                 memory_retriever=memory_retriever,
+                memory_learner=memory_learner,
             )
 
             server = WebSocketServer(

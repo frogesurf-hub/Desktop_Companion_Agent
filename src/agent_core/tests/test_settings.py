@@ -21,6 +21,7 @@ DCA_ENVIRONMENT_VARIABLES = [
     "DCA_DEEPSEEK_TIMEOUT_SECONDS",
     "DCA_DEEPSEEK_THINKING_ENABLED",
     "DCA_LOG_LEVEL",
+    "DCA_AUTOMATIC_LEARNING_ENABLED",
 ]
 
 
@@ -86,6 +87,8 @@ def test_settings_default_values(
 
     assert settings.working_context_retention_days == 7
 
+    assert settings.automatic_learning_enabled is True
+
 
 def test_environment_variables_override_defaults(
     monkeypatch: pytest.MonkeyPatch,
@@ -101,6 +104,11 @@ def test_environment_variables_override_defaults(
 
     monkeypatch.chdir(
         tmp_path,
+    )
+
+    monkeypatch.setenv(
+        "DCA_AUTOMATIC_LEARNING_ENABLED",
+        "false",
     )
 
     monkeypatch.setenv(
@@ -182,6 +190,8 @@ def test_environment_variables_override_defaults(
     assert settings.active_character_id == "custom"
 
     assert settings.working_context_retention_days == 14
+
+    assert settings.automatic_learning_enabled is False
 
 
 def test_invalid_runtime_mode_is_rejected(

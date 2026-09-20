@@ -11,6 +11,9 @@ from agent_core.characters import (
 )
 from agent_core.composition import PromptContextComposer
 from agent_core.config import Settings
+from agent_core.memory.learning import (
+    AutomaticMemoryTurnLearner,
+)
 from agent_core.providers import ProviderConfigurationError
 from agent_core.temporal import (
     Clock,
@@ -136,6 +139,7 @@ def _make_settings(
     model_provider: str = "deepseek",
     character_definitions_dir: Path | None = None,
     active_character_id: str = "aria",
+    automatic_learning_enabled: bool = True,
 ) -> Settings:
     """
     创建 Composition Root 测试使用的确定性 Settings。
@@ -164,6 +168,7 @@ def _make_settings(
         log_level="DEBUG",
         character_definitions_dir=character_definitions_dir,
         active_character_id=active_character_id,
+        automatic_learning_enabled=automatic_learning_enabled,
     )
 
 
@@ -265,12 +270,14 @@ def _install_runtime_fakes(
             character: CharacterDefinition,
             composer: PromptContextComposer,
             clock: Clock,
-            memory_retriever=None
+            memory_retriever=None,
+            memory_learner=None,
         ) -> None:
             self.character = character
             self.composer = composer
             self.clock = clock
             self.memory_retriever = memory_retriever
+            self.memory_learner = memory_learner
             calls.append(
                 (
                     "agent_init",
@@ -279,6 +286,8 @@ def _install_runtime_fakes(
                         "character": character,
                         "composer": composer,
                         "clock": clock,
+                        "memory_retriever": memory_retriever,
+                        "memory_learner": memory_learner,
                     },
                 )
             )
@@ -549,6 +558,7 @@ def test_run_initializes_deepseek_and_event_runtime(
     )
 
     assert agent_init["character"] is test_character
+
     assert isinstance(
         agent_init["composer"],
         PromptContextComposer,
@@ -557,6 +567,11 @@ def test_run_initializes_deepseek_and_event_runtime(
     assert isinstance(
         agent_init["clock"],
         SystemClock,
+    )
+
+    assert isinstance(
+        agent_init["memory_learner"],
+        AutomaticMemoryTurnLearner,
     )
 
     assert calls[5][0] == "server_init"
@@ -752,4 +767,47 @@ def test_provider_is_closed_when_event_bus_close_fails(
     assert calls[-1] == (
         "provider_close",
         None,
+    )
+
+
+def test_run_disables_automatic_memory_learning_when_configured(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[
+        tuple[str, object]
+    ] = []
+
+    settings = _make_settings(
+        automatic_learning_enabled=False,
+    )
+
+    _install_runtime_fakes(
+        monkeypatch,
+        calls,
+        settings,
+    )
+
+    asyncio.run(
+        main_module.run(),
+    )
+
+    agent_init = next(
+        payload
+        for name, payload in calls
+        if name == "agent_init"
+    )
+
+    assert isinstance(
+        agent_init,
+        dict,
+    )
+
+    assert (
+        agent_init["memory_learner"]
+        is None
+    )
+
+    assert (
+        agent_init["memory_retriever"]
+        is not None
     )
