@@ -1,9 +1,10 @@
 # Desktop Companion Agent — Phase 4 Task 8 Implementation Plan
 
-Status: Active Implementation Baseline
+Status: Implementation Complete — Checkpoint Pending
 Phase: 4 — Memory System
 Task: 8 — Memory Failure Isolation & Health Behavior
-Repository baseline reviewed: `dc03908 feat(memory): wire automatic learning composition root`
+Repository baseline before Task 8E checkpoint: `3c6672e feat(memory): track governance health failures`
+Current implementation status: Task 8A–8E completed; final staged review / checkpoint remain
 
 ---
 
@@ -11,7 +12,7 @@ Repository baseline reviewed: `dc03908 feat(memory): wire automatic learning com
 
 Task 8 makes Memory an optional runtime capability from the perspective of ordinary chat availability.
 
-The accepted failure semantics are:
+Accepted failure semantics:
 
 ```text
 Retrieval failure
@@ -21,12 +22,11 @@ Retrieval failure
 
 Automatic-learning failure
 → Memory degrades
-→ failure remains observable
 → already-valid chat response still succeeds
 
 Governance failure
 → operation fails truthfully
-→ no false success
+→ failure is observable through Memory health
 
 Fatal non-Memory runtime failure
 → still propagates according to its owning subsystem
@@ -36,52 +36,46 @@ Task 8 implements ADR 0018 without moving Memory responsibility into Character, 
 
 ---
 
-## 2. Existing Baseline
-
-Task 7 completed the factual-memory loop:
+## 2. Final Runtime Architecture
 
 ```text
-Conversation Turn
-→ LLMMemoryCandidateExtractor
-→ MemoryLearningPolicy
-→ ExistingMemoryResolver
-→ MemoryConflictPolicy / lifecycle handling
-→ MemoryLearningService
-→ SQLiteMemoryRepository
-→ later Retrieval
+MemoryHealthTracker
+共享 Memory 健康状态
+        │
+        ├───────────────────────────────┐
+        │                               │
+        ↓                               ↓
+ResilientMemoryRetriever       ResilientMemoryTurnLearner
+检索故障隔离                    自动学习故障隔离
+        ↓                               ↓
+MemoryRetrievalService         AutomaticMemoryTurnLearner
+记忆检索服务                    自动记忆学习
+        │                               │
+        └──────────────┬────────────────┘
+                       ↓
+              SQLiteMemoryRepository
+              SQLite 持久化适配器
 ```
 
-Current runtime wiring:
+Governance currently has:
 
 ```text
-Agent
-├─ MemoryRetriever
-├─ MemoryTurnLearner | None
-├─ LLMProvider
-├─ PromptContextComposer
-└─ Clock
+HealthAwareMemoryGovernanceService
+治理健康边界
+        ↓
+MemoryGovernanceService
+治理业务逻辑
 ```
 
-Current weakness:
+The governance wrapper is implemented and tested, but no live runtime consumer exists yet.
 
-```text
-MemoryRetriever raises
-→ Agent chat path fails
-
-MemoryTurnLearner raises
-→ successful provider response is lost to caller
-
-Governance repository raises
-→ exception propagates
-```
-
-The third behavior is already directionally correct for fail-closed governance; Task 8 must preserve it while making failure observable through Memory health.
+Task 8 intentionally does **not** instantiate an unused Governance service in `main.py` merely to complete a diagram. Task 9 will introduce the real WebSocket Governance consumer and should wire the same Memory health boundary there.
 
 ---
 
 ## 3. Accepted Boundaries
 
-Task 8 must preserve:
+Task 8 preserves:
 
 ```text
 Runtime Availability != Memory Availability
@@ -108,9 +102,7 @@ Task 8 does not redesign:
 
 ## 4. Memory Health Model
 
-Task 8 introduces a minimal runtime-visible Memory health boundary.
-
-### Capability categories
+Capability categories:
 
 ```text
 RETRIEVAL
@@ -118,7 +110,7 @@ AUTOMATIC_LEARNING
 GOVERNANCE
 ```
 
-### Capability status
+Capability status:
 
 ```text
 AVAILABLE
@@ -126,13 +118,7 @@ DEGRADED
 UNAVAILABLE
 ```
 
-`DEGRADED` means a recoverable operation failure has occurred at that capability boundary.
-
-`UNAVAILABLE` is reserved for a capability that is explicitly known to be unavailable. Task 8 does not infer global unavailability from every single exception.
-
-### Aggregate health
-
-Overall Memory health is derived:
+Aggregate health:
 
 ```text
 any UNAVAILABLE
@@ -145,11 +131,7 @@ else
 → AVAILABLE
 ```
 
-This prevents one failed learning write from incorrectly declaring Retrieval unavailable.
-
-### Safe diagnostics
-
-Health may record:
+Safe diagnostics may record:
 
 ```text
 capability
@@ -157,80 +139,70 @@ status
 last error type
 ```
 
-Health must not record:
+They must not record:
 
 ```text
 Memory content
 full user text
+full assistant text
 full prompt
 API secrets
-raw SQL with factual content
+raw SQL carrying factual content
 ```
 
 ---
 
-## 5. Task Breakdown
+## 5. Task Breakdown and Final Status
 
 ### Task 8A — Memory Health Contract
 
-Goal:
+Status: Completed
 
-- define capability/status enums;
-- define immutable health snapshots;
-- define mutable in-process health tracker;
-- keep health independent from Agent and persistence implementation.
+Implemented:
 
-Files expected:
+- `MemoryCapability`;
+- `MemoryHealthStatus`;
+- immutable health snapshots;
+- in-process `MemoryHealthTracker`;
+- capability-local recovery.
+
+Checkpoint:
 
 ```text
-src/agent_core/memory/health.py
-src/agent_core/memory/__init__.py
-src/agent_core/tests/test_memory_health.py
+2831829 feat(memory): add memory health model
 ```
-
-No runtime behavior changes yet.
 
 ---
 
 ### Task 8B — Retrieval Fail-Open Boundary
 
-Goal:
+Status: Completed
+
+Implemented:
 
 ```text
 MemoryRetriever failure
 → mark RETRIEVAL DEGRADED
 → safe warning log
-→ PreparedMemoryContext()
+→ empty PreparedMemoryContext
 → Agent continues to Provider
 ```
 
-Preferred architecture:
+Successful retrieval marks the Retrieval capability AVAILABLE again.
+
+Checkpoint:
 
 ```text
-Agent
-→ ResilientMemoryRetriever
-→ existing MemoryRetriever
-```
-
-Agent should not learn SQLAlchemy exception types.
-
-Success should mark the Retrieval capability AVAILABLE again.
-
-Acceptance:
-
-```text
-repository/retrieval failure
-→ provider still receives request
-→ prompt contains no fabricated Memory
-→ response succeeds
-→ health shows Retrieval degraded
+b8cea85 feat(memory): isolate memory retrieval failures
 ```
 
 ---
 
 ### Task 8C — Automatic-Learning Fail-Open Boundary
 
-Goal:
+Status: Completed
+
+Implemented:
 
 ```text
 Provider response already exists
@@ -240,121 +212,101 @@ Provider response already exists
 → preserve provider response
 ```
 
-Preferred architecture:
+Successful learning marks the Automatic Learning capability AVAILABLE again.
+
+Checkpoint:
 
 ```text
-Agent
-→ ResilientMemoryTurnLearner
-→ AutomaticMemoryTurnLearner
-```
-
-Agent should not own Memory exception classification.
-
-Acceptance:
-
-```text
-learning extraction / resolution / write failure
-→ chat response remains response
-→ failure observable through health/logging
+494c536 feat(memory): isolate automatic learning failures
 ```
 
 ---
 
 ### Task 8D — Governance Fail-Closed + Health
 
-Current Governance already propagates repository mutation failures.
+Status: Completed
 
-Task 8 must preserve:
+Implemented:
 
 ```text
-edit/delete persistence failure
-→ exception / failure result
-→ never report success
+Governance infrastructure failure
+→ mark GOVERNANCE DEGRADED
+→ safe warning log
+→ re-raise failure
+→ never report false success
 ```
 
-Add a governance boundary or instrumentation layer that:
+Existing domain governance errors remain domain errors and are not rewritten into success.
 
-- records GOVERNANCE degradation;
-- does not swallow failures;
-- does not rewrite domain errors such as MemoryNotFoundError into success;
-- keeps protocol-safe mapping deferred to Task 9.
-
-Acceptance:
+Checkpoint:
 
 ```text
-edit failure
-→ caller receives failure
-→ health records Governance degradation
-
-delete failure
-→ caller receives failure
-→ health records Governance degradation
+3c6672e feat(memory): track governance health failures
 ```
 
 ---
 
 ### Task 8E — Composition Root + Acceptance
 
-Wire one shared Memory health tracker into the Task 8 boundaries.
+Status: Implementation Completed — Checkpoint Pending
 
-Target runtime:
+Implemented in `main.py`:
 
 ```text
-MemoryHealthTracker
-        │
-        ├─ resilient Retrieval
-        ├─ resilient Automatic Learning
-        └─ health-aware Governance
+create one MemoryHealthTracker
+        ↓
+wrap MemoryRetrievalService
+with ResilientMemoryRetriever
+        ↓
+wrap AutomaticMemoryTurnLearner
+with ResilientMemoryTurnLearner
+        ↓
+inject resilient boundaries into Agent
 ```
 
-Task 8 runtime acceptance:
+Important runtime invariant:
 
 ```text
-Retrieval failure
-→ chat succeeds
-→ empty Memory context
-
-Learning failure
-→ provider response succeeds
-
-Governance failure
-→ operation fails truthfully
-
-Memory health
-→ distinguishable from healthy state
+Retrieval wrapper
+and
+Automatic Learning wrapper
+share the same MemoryHealthTracker instance
 ```
 
-Task 8 completion also requires:
+When automatic learning is disabled:
 
 ```text
-targeted pytest
-full pytest
-Ruff
-mypy
-git diff --check
-staged review
+memory_learner = None
+```
+
+while Retrieval remains available through `ResilientMemoryRetriever`.
+
+Governance runtime wiring is intentionally deferred until Task 9 introduces the real Governance protocol consumer.
+
+Suggested checkpoint:
+
+```text
+feat(memory): wire memory health runtime
 ```
 
 ---
 
 ## 6. Error Catching Policy
 
-Failure-isolation boundaries may catch broad `Exception` only at the explicit outer Memory capability boundary.
-
-Reason:
-
-- persistence adapters may surface SQLAlchemy / sqlite / filesystem exceptions;
-- extraction may surface provider-neutral parsing or provider errors;
-- Agent must not depend on every concrete Memory implementation error type.
-
-The broad catch is allowed only where the architecture explicitly says:
+Broad `Exception` catching is allowed only at explicit outer Memory capability boundaries where the architecture says:
 
 ```text
 Memory capability failed
 → degrade safely
 ```
 
-Internal domain services should continue to use specific validation/state errors.
+This applies to:
+
+- resilient Retrieval;
+- resilient Automatic Learning;
+- health-aware Governance instrumentation.
+
+Internal domain services continue to use specific validation/state errors.
 
 Never catch:
 
@@ -392,47 +344,135 @@ raw database row
 
 ## 8. Governance Semantics
 
-Task 8 does not convert Governance into fail-open behavior.
+Governance remains fail-closed.
 
 Correct:
 
 ```text
-repository.replace_active_revision raises
-→ edit_memory does not return success
+repository mutation fails
+→ governance operation fails
+→ caller receives failure
+→ health records degradation
 ```
 
 Incorrect:
 
 ```text
-repository write fails
-→ log warning
-→ return fake edited Memory
+repository mutation fails
+→ warning only
+→ fake success returned
 ```
 
-Task 9 will later map these failures into stable Desktop-safe protocol errors.
+Task 9 will later map Governance failures into stable Desktop-safe protocol errors.
 
 ---
 
 ## 9. Health Recovery Semantics
 
-A successful operation at a capability boundary may mark that capability `AVAILABLE` again.
-
-This recovery is capability-local:
+Recovery is capability-local:
 
 ```text
 Retrieval succeeds
 → RETRIEVAL AVAILABLE
 
-AUTOMATIC_LEARNING may still be DEGRADED
+Automatic Learning may still be DEGRADED
 ```
-
-Aggregate health is derived from all capability states.
 
 No background health probe is introduced in Task 8.
 
 ---
 
-## 10. Explicit Non-Goals
+## 10. Verification
+
+Task 8E targeted integration validation:
+
+```text
+27 passed
+```
+
+Covered:
+
+```text
+test_main.py
+test_memory_health.py
+test_resilient_memory_retriever.py
+test_resilient_memory_turn_learner.py
+test_health_aware_memory_governance.py
+```
+
+Full Python regression:
+
+```text
+323 passed in 8.41s
+```
+
+Static / diff quality gates:
+
+```text
+Ruff
+→ All checks passed
+
+mypy
+→ Success: no issues found in 104 source files
+
+git diff --check
+→ clean
+```
+
+Current Task 8E working tree before staging:
+
+```text
+M src/agent_core/main.py
+M src/agent_core/tests/test_main.py
+```
+
+---
+
+## 11. Completion Criteria
+
+Task 8 implementation satisfies the intended behavior when:
+
+1. Memory health distinguishes Retrieval, Automatic Learning, and Governance capability state.
+2. Retrieval failure degrades to empty prepared context.
+3. Retrieval failure does not prevent ordinary Provider chat.
+4. Retrieval failure does not fabricate Memory context.
+5. Automatic-learning failure does not invalidate an already successful chat response.
+6. Automatic-learning failure remains observable.
+7. Governance edit failure remains fail-closed.
+8. Governance delete failure remains fail-closed.
+9. Governance infrastructure failure becomes visible in Memory health.
+10. Logs avoid sensitive Memory/conversation content.
+11. Memory health remains independent from Agent/Provider health.
+12. Existing Task 7 behavior remains intact while Memory is healthy.
+13. One shared runtime health tracker is used by the live Retrieval and Automatic Learning boundaries.
+14. Governance is not artificially instantiated without a real runtime consumer.
+15. Targeted and full quality gates pass.
+16. Final staged diff is reviewed before checkpoint commit.
+
+Task 8 becomes formally complete after Task 8E staged review, commit, and push.
+
+---
+
+## 12. Actual Task 8 Commit Progression
+
+Confirmed commits:
+
+```text
+2831829 feat(memory): add memory health model
+b8cea85 feat(memory): isolate memory retrieval failures
+494c536 feat(memory): isolate automatic learning failures
+3c6672e feat(memory): track governance health failures
+```
+
+Current Task 8E checkpoint message:
+
+```text
+feat(memory): wire memory health runtime
+```
+
+---
+
+## 13. Explicit Non-Goals
 
 Task 8 does not implement:
 
@@ -453,45 +493,36 @@ The pre-existing `memory_engine.dispose()` runtime ownership issue remains a sep
 
 ---
 
-## 11. Completion Criteria
+## 14. Transition to Task 9
 
-Task 8 is complete when:
-
-1. Memory health can distinguish Retrieval, Automatic Learning, and Governance capability state.
-2. Retrieval failure degrades to empty prepared context.
-3. Retrieval failure does not prevent ordinary Provider chat.
-4. Retrieval failure does not fabricate Memory context.
-5. Automatic-learning failure does not invalidate an already successful chat response.
-6. Automatic-learning failure remains observable.
-7. Governance edit failure remains fail-closed.
-8. Governance delete failure remains fail-closed.
-9. Governance failure becomes visible in Memory health.
-10. Logs avoid sensitive Memory/conversation content.
-11. Memory health is independent from Agent/Provider health.
-12. Existing Task 7 behavior remains intact when Memory is healthy.
-13. Targeted and full quality gates pass.
-
----
-
-## 12. Planned Checkpoints
-
-Suggested reviewable commits:
+After Task 8 is checkpointed, Task 9 can assume:
 
 ```text
-Task 8A
-feat(memory): add memory health model
+Memory Retrieval
+→ safe fail-open runtime boundary
 
-Task 8B
-feat(memory): isolate memory retrieval failures
+Automatic Learning
+→ safe fail-open runtime boundary
 
-Task 8C
-feat(memory): isolate automatic learning failures
+Governance
+→ fail-closed health-aware boundary exists
 
-Task 8D
-feat(memory): track governance health failures
-
-Task 8E
-feat(memory): wire memory health runtime
+MemoryHealthTracker
+→ capability-local health model exists
 ```
 
-Exact checkpoint messages may change to match the final implementation.
+Task 9 will add the real Desktop-facing Governance consumer:
+
+```text
+WPF / Desktop
+    ↓
+WebSocket Memory Protocol
+    ↓
+HealthAwareMemoryGovernanceService
+    ↓
+MemoryGovernanceService
+    ↓
+SQLiteMemoryRepository
+```
+
+At that point Governance runtime wiring should use the same accepted health semantics rather than inventing a second health system.

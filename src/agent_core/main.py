@@ -13,9 +13,11 @@ from agent_core.config import Settings, get_settings
 from agent_core.core.agent import Agent
 from agent_core.events import EventBus
 from agent_core.memory import (
+    MemoryHealthTracker,
     MemoryRetrievalLimits,
     MemoryRetrievalPolicy,
     MemoryRetrievalService,
+    ResilientMemoryRetriever,
 )
 from agent_core.memory.conflict import (
     MemoryConflictPolicy,
@@ -26,6 +28,7 @@ from agent_core.memory.learning import (
     LLMMemoryCandidateExtractor,
     MemoryLearningPolicy,
     MemoryLearningService,
+    ResilientMemoryTurnLearner,
 )
 from agent_core.memory.persistence import (
     SQLiteMemoryRepository,
@@ -106,7 +109,8 @@ def _create_memory_learner(
     provider: DeepSeekProvider,
     clock: SystemClock,
     repository: SQLiteMemoryRepository,
-) -> AutomaticMemoryTurnLearner | None:
+    health: MemoryHealthTracker,
+) -> ResilientMemoryTurnLearner | None:
     """
     根据 Runtime Settings 组装 Automatic Memory Learning。
 
@@ -133,9 +137,14 @@ def _create_memory_learner(
         conflict_policy=MemoryConflictPolicy(),
     )
 
-    return AutomaticMemoryTurnLearner(
+    automatic_learner = AutomaticMemoryTurnLearner(
         extractor=extractor,
         learning_service=learning_service,
+    )
+
+    return ResilientMemoryTurnLearner(
+        learner=automatic_learner,
+        health=health,
     )
 
 
@@ -169,13 +178,20 @@ async def run() -> None:
         session_factory=memory_session_factory,
     )
 
+    memory_health = MemoryHealthTracker()
+
     memory_policy = MemoryRetrievalPolicy(
         limits=MemoryRetrievalLimits(),
     )
 
-    memory_retriever = MemoryRetrievalService(
+    memory_retrieval_service = MemoryRetrievalService(
         repository=memory_repository,
         policy=memory_policy,
+    )
+
+    memory_retriever = ResilientMemoryRetriever(
+        retriever=memory_retrieval_service,
+        health=memory_health,
     )
 
     provider = _create_provider(
@@ -221,6 +237,7 @@ async def run() -> None:
             provider=provider,
             clock=clock,
             repository=memory_repository,
+            health=memory_health,
         )
 
         event_bus = EventBus(

@@ -11,8 +11,12 @@ from agent_core.characters import (
 )
 from agent_core.composition import PromptContextComposer
 from agent_core.config import Settings
+from agent_core.memory import (
+    ResilientMemoryRetriever,
+)
 from agent_core.memory.learning import (
     AutomaticMemoryTurnLearner,
+    ResilientMemoryTurnLearner,
 )
 from agent_core.providers import ProviderConfigurationError
 from agent_core.temporal import (
@@ -569,9 +573,32 @@ def test_run_initializes_deepseek_and_event_runtime(
         SystemClock,
     )
 
+    memory_retriever = (
+        agent_init["memory_retriever"]
+    )
+
+    memory_learner = (
+        agent_init["memory_learner"]
+    )
+
     assert isinstance(
-        agent_init["memory_learner"],
+        memory_retriever,
+        ResilientMemoryRetriever,
+    )
+
+    assert isinstance(
+        memory_learner,
+        ResilientMemoryTurnLearner,
+    )
+
+    assert isinstance(
+        memory_learner._learner,
         AutomaticMemoryTurnLearner,
+    )
+
+    assert (
+        memory_retriever._health
+        is memory_learner._health
     )
 
     assert calls[5][0] == "server_init"
@@ -807,7 +834,7 @@ def test_run_disables_automatic_memory_learning_when_configured(
         is None
     )
 
-    assert (
-        agent_init["memory_retriever"]
-        is not None
+    assert isinstance(
+        agent_init["memory_retriever"],
+        ResilientMemoryRetriever,
     )
