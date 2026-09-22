@@ -3,8 +3,10 @@ from json import JSONDecodeError
 
 from websockets.asyncio.server import ServerConnection, serve
 
-from agent_core.core.agent import Agent
 from agent_core.core.message import Message
+from agent_core.core.message_router import (
+    MessageProcessor,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -17,8 +19,8 @@ class WebSocketServer:
     - 启动服务器
     - 管理客户端连接生命周期
     - 接收协议消息
-    - 调用 Agent
-    - 返回 Agent 响应
+    - 调用注入的 Runtime Message Processor
+    - 返回协议响应
     - 处理基础协议错误
     """
 
@@ -26,11 +28,11 @@ class WebSocketServer:
         self,
         host: str,
         port: int,
-        agent: Agent,
+        processor: MessageProcessor,
     ) -> None:
         self.host = host
         self.port = port
-        self.agent = agent
+        self.processor = processor
 
     async def handle_connection(
         self,
@@ -116,7 +118,7 @@ class WebSocketServer:
                 },
             )
 
-        return await self.agent.process_message(
+        return await self.processor.process_message(
             message,
         )
 

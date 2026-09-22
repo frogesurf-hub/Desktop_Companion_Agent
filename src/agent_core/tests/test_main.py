@@ -11,12 +11,19 @@ from agent_core.characters import (
 )
 from agent_core.composition import PromptContextComposer
 from agent_core.config import Settings
+from agent_core.core.message_router import (
+    RuntimeMessageRouter,
+)
 from agent_core.memory import (
+    HealthAwareMemoryGovernanceService,
     ResilientMemoryRetriever,
 )
 from agent_core.memory.learning import (
     AutomaticMemoryTurnLearner,
     ResilientMemoryTurnLearner,
+)
+from agent_core.memory.protocol import (
+    MemoryProtocolHandler,
 )
 from agent_core.providers import ProviderConfigurationError
 from agent_core.temporal import (
@@ -301,7 +308,7 @@ def _install_runtime_fakes(
             self,
             host: str,
             port: int,
-            agent: object,
+            processor: object,
         ) -> None:
             calls.append(
                 (
@@ -309,7 +316,7 @@ def _install_runtime_fakes(
                     (
                         host,
                         port,
-                        agent,
+                        processor,
                     ),
                 )
             )
@@ -602,6 +609,48 @@ def test_run_initializes_deepseek_and_event_runtime(
     )
 
     assert calls[5][0] == "server_init"
+
+    server_init = calls[5][1]
+
+    assert isinstance(
+        server_init,
+        tuple,
+    )
+
+    runtime_processor = server_init[2]
+
+    assert isinstance(
+        runtime_processor,
+        RuntimeMessageRouter,
+    )
+
+    memory_processor = (
+        runtime_processor._memory_processor
+    )
+
+    assert isinstance(
+        memory_processor,
+        MemoryProtocolHandler,
+    )
+
+    memory_governance = (
+        memory_processor._governance
+    )
+
+    assert isinstance(
+        memory_governance,
+        HealthAwareMemoryGovernanceService,
+    )
+
+    assert (
+        memory_governance._health
+        is memory_retriever._health
+    )
+
+    assert (
+        memory_governance._health
+        is memory_learner._health
+    )
 
     assert calls[6] == (
         "event_bus_start",

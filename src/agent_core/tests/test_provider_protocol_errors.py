@@ -124,7 +124,7 @@ def test_websocket_connection_survives_provider_failure() -> None:
         server = WebSocketServer(
             host="127.0.0.1",
             port=port,
-            agent=agent,
+            processor=agent,
         )
 
         server_task = asyncio.create_task(

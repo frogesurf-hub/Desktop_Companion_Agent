@@ -2,6 +2,7 @@ import asyncio
 import logging
 import socket
 from contextlib import suppress
+from uuid import UUID
 
 import pytest
 from websockets.asyncio.client import ClientConnection, connect
@@ -9,11 +10,87 @@ from websockets.asyncio.client import ClientConnection, connect
 from agent_core.communication import WebSocketServer
 from agent_core.core.agent import Agent
 from agent_core.core.message import Message
+from agent_core.core.message_router import (
+    RuntimeMessageRouter,
+)
+from agent_core.memory import (
+    MemoryDomain,
+    MemoryGovernanceEntry,
+    MemoryRevision,
+    MemoryScope,
+)
+from agent_core.memory.protocol import (
+    MemoryProtocolHandler,
+)
 from agent_core.providers import LLMResponse
 from agent_core.tests.fakes import (
     FakeLLMProvider,
     create_test_agent,
 )
+
+
+class EmptyMemoryGovernance:
+    async def list_memories(
+        self,
+        *,
+        domain: MemoryDomain | None = None,
+        scope: MemoryScope | None = None,
+    ) -> tuple[
+        MemoryGovernanceEntry,
+        ...,
+    ]:
+        return ()
+
+    async def inspect_memory(
+        self,
+        memory_id: UUID,
+    ) -> MemoryGovernanceEntry:
+        raise AssertionError(
+            "inspect_memory should not be called"
+        )
+
+    async def edit_memory(
+        self,
+        memory_id: UUID,
+        new_content: str,
+    ) -> MemoryGovernanceEntry:
+        raise AssertionError(
+            "edit_memory should not be called"
+        )
+
+    async def delete_memory(
+        self,
+        memory_id: UUID,
+    ) -> MemoryGovernanceEntry:
+        raise AssertionError(
+            "delete_memory should not be called"
+        )
+
+    async def get_history(
+        self,
+        memory_id: UUID,
+    ) -> tuple[
+        MemoryRevision,
+        ...,
+    ]:
+        raise AssertionError(
+            "get_history should not be called"
+        )
+
+
+def _create_runtime_router(
+    response_text: str = "fake response",
+) -> RuntimeMessageRouter:
+    memory_protocol = MemoryProtocolHandler(
+        governance=EmptyMemoryGovernance(),
+    )
+
+    return RuntimeMessageRouter(
+        chat_processor=_create_agent(
+            response_text=response_text,
+        ),
+        memory_processor=memory_protocol,
+    )
 
 
 def _get_free_port() -> int:
@@ -98,7 +175,7 @@ def test_websocket_server_connection_lifecycle(
         server = WebSocketServer(
             host="127.0.0.1",
             port=port,
-            agent=_create_agent(),
+            processor=_create_agent(),
         )
 
         server_task = asyncio.create_task(
@@ -154,7 +231,7 @@ def test_websocket_server_message_round_trip() -> None:
         server = WebSocketServer(
             host="127.0.0.1",
             port=port,
-            agent=_create_agent(
+            processor=_create_runtime_router(
                 response_text="来自 Provider 的 WebSocket 回复",
             ),
         )
@@ -209,6 +286,77 @@ def test_websocket_server_message_round_trip() -> None:
     asyncio.run(scenario())
 
 
+def test_websocket_server_memory_list_round_trip() -> None:
+    async def scenario() -> None:
+        port = _get_free_port()
+
+        server = WebSocketServer(
+            host="127.0.0.1",
+            port=port,
+            processor=_create_runtime_router(),
+        )
+
+        server_task = asyncio.create_task(
+            server.run(),
+        )
+
+        try:
+            client = await _connect_with_retry(
+                f"ws://127.0.0.1:{port}"
+            )
+
+            request = Message(
+                id="memory-request-1",
+                type="memory.list",
+                source="desktop",
+                payload={},
+            )
+
+            await client.send(
+                request.to_json(),
+            )
+
+            raw_response = await client.recv()
+
+            assert isinstance(
+                raw_response,
+                str,
+            )
+
+            response = Message.from_json(
+                raw_response,
+            )
+
+            assert (
+                response.type
+                == "memory.list.result"
+            )
+
+            assert (
+                response.payload["request_id"]
+                == "memory-request-1"
+            )
+
+            assert (
+                response.payload["memories"]
+                == []
+            )
+
+            await client.close()
+
+        finally:
+            server_task.cancel()
+
+            with suppress(
+                asyncio.CancelledError
+            ):
+                await server_task
+
+    asyncio.run(
+        scenario()
+    )
+
+
 def test_websocket_server_rejects_invalid_json() -> None:
     """
     验证非法 JSON 会返回 error Message，
@@ -221,7 +369,7 @@ def test_websocket_server_rejects_invalid_json() -> None:
         server = WebSocketServer(
             host="127.0.0.1",
             port=port,
-            agent=_create_agent(),
+            processor=_create_agent(),
         )
 
         server_task = asyncio.create_task(
@@ -277,7 +425,7 @@ def test_websocket_server_rejects_invalid_message_structure() -> None:
         server = WebSocketServer(
             host="127.0.0.1",
             port=port,
-            agent=_create_agent(),
+            processor=_create_agent(),
         )
 
         server_task = asyncio.create_task(
@@ -333,7 +481,7 @@ def test_websocket_server_rejects_binary_message() -> None:
         server = WebSocketServer(
             host="127.0.0.1",
             port=port,
-            agent=_create_agent(),
+            processor=_create_agent(),
         )
 
         server_task = asyncio.create_task(
@@ -390,7 +538,7 @@ def test_websocket_connection_survives_invalid_message() -> None:
         server = WebSocketServer(
             host="127.0.0.1",
             port=port,
-            agent=_create_agent(
+            processor=_create_agent(
                 response_text="连接仍然可用",
             ),
         )

@@ -11,8 +11,13 @@ from agent_core.communication import WebSocketServer
 from agent_core.composition import PromptContextComposer
 from agent_core.config import Settings, get_settings
 from agent_core.core.agent import Agent
+from agent_core.core.message_router import (
+    RuntimeMessageRouter,
+)
 from agent_core.events import EventBus
 from agent_core.memory import (
+    HealthAwareMemoryGovernanceService,
+    MemoryGovernanceService,
     MemoryHealthTracker,
     MemoryRetrievalLimits,
     MemoryRetrievalPolicy,
@@ -34,6 +39,9 @@ from agent_core.memory.persistence import (
     SQLiteMemoryRepository,
     create_memory_engine,
     create_memory_session_factory,
+)
+from agent_core.memory.protocol import (
+    MemoryProtocolHandler,
 )
 from agent_core.observability import setup_logging
 from agent_core.providers import ProviderConfigurationError
@@ -254,10 +262,31 @@ async def run() -> None:
                 memory_learner=memory_learner,
             )
 
+            memory_governance_service = MemoryGovernanceService(
+                repository=memory_repository,
+                clock=clock,
+            )
+
+            memory_governance = (
+                HealthAwareMemoryGovernanceService(
+                    governance=memory_governance_service,
+                    health=memory_health,
+                )
+            )
+
+            memory_protocol = MemoryProtocolHandler(
+                governance=memory_governance,
+            )
+
+            runtime_router = RuntimeMessageRouter(
+                chat_processor=agent,
+                memory_processor=memory_protocol,
+            )
+
             server = WebSocketServer(
                 host=settings.websocket_host,
                 port=settings.websocket_port,
-                agent=agent,
+                processor=runtime_router,
             )
 
             await event_bus.start()
