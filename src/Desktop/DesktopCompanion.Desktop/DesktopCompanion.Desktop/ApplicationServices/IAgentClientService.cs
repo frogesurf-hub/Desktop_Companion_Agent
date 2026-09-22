@@ -14,6 +14,10 @@ public interface IAgentClientService : IAsyncDisposable
         Uri endpoint,
         CancellationToken cancellationToken = default);
 
+    Task<AgentMessage> SendRequestAsync(
+        AgentMessage request,
+        CancellationToken cancellationToken = default);
+
     Task DisconnectAsync(
         CancellationToken cancellationToken = default);
 

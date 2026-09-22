@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Text.Json.Nodes;
 
 using DesktopCompanion.Desktop.Communication;
@@ -10,6 +11,15 @@ public sealed class AgentClientService : IAgentClientService
     private readonly IAgentConnection _connection;
 
     private CancellationTokenSource? _receiveCancellation;
+    private readonly ConcurrentDictionary<
+        string,
+        TaskCompletionSource<AgentMessage>>
+        _pendingRequests =
+            new(StringComparer.Ordinal);
+
+    private readonly SemaphoreSlim _sendGate = new(
+        initialCount: 1,
+        maxCount: 1);
     private Task? _receiveTask;
 
     public AgentClientService(
@@ -45,7 +55,7 @@ public sealed class AgentClientService : IAgentClientService
             _receiveCancellation.Token);
     }
 
-    public Task SendChatAsync(
+    public async Task SendChatAsync(
         string message,
         CancellationToken cancellationToken = default)
     {
@@ -64,15 +74,85 @@ public sealed class AgentClientService : IAgentClientService
                 ["message"] = message,
             });
 
-        return _connection.SendAsync(
+        await SendMessageAsync(
             request,
-            cancellationToken);
+            cancellationToken)
+            .ConfigureAwait(false);
+    }
+
+    public async Task<AgentMessage> SendRequestAsync(
+        AgentMessage request,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(
+            request);
+
+        if (!IsConnected)
+        {
+            throw new InvalidOperationException(
+                "The Agent connection is not open.");
+        }
+
+        if (string.IsNullOrWhiteSpace(
+            request.Id))
+        {
+            throw new ArgumentException(
+                "Request ID cannot be empty.",
+                nameof(request));
+        }
+
+        var completion =
+            new TaskCompletionSource<AgentMessage>(
+                TaskCreationOptions.RunContinuationsAsynchronously);
+
+        if (!_pendingRequests.TryAdd(
+            request.Id,
+            completion))
+        {
+            throw new InvalidOperationException(
+                "A request with the same ID is already pending.");
+        }
+
+        using CancellationTokenRegistration registration =
+            cancellationToken.Register(
+                () =>
+                {
+                    if (_pendingRequests.TryRemove(
+                        request.Id,
+                        out TaskCompletionSource<
+                            AgentMessage>? pending))
+                    {
+                        pending.TrySetCanceled(
+                            cancellationToken);
+                    }
+                });
+
+        try
+        {
+            await SendMessageAsync(
+                request,
+                cancellationToken)
+                .ConfigureAwait(false);
+
+            return await completion.Task
+                .ConfigureAwait(false);
+        }
+        catch
+        {
+            _pendingRequests.TryRemove(
+                request.Id,
+                out _);
+
+            throw;
+        }
     }
 
     public async Task DisconnectAsync(
         CancellationToken cancellationToken = default)
     {
         _receiveCancellation?.Cancel();
+
+        CancelPendingRequests();
 
         if (_receiveTask is not null)
         {
@@ -86,13 +166,20 @@ public sealed class AgentClientService : IAgentClientService
             }
         }
 
-        await _connection.DisconnectAsync(
-            cancellationToken);
+        try
+        {
+            await _connection.DisconnectAsync(
+                cancellationToken);
+        }
+        finally
+        {
+            CancelPendingRequests();
 
-        _receiveCancellation?.Dispose();
+            _receiveCancellation?.Dispose();
 
-        _receiveCancellation = null;
-        _receiveTask = null;
+            _receiveCancellation = null;
+            _receiveTask = null;
+        }
     }
 
     public async ValueTask DisposeAsync()
@@ -117,6 +204,22 @@ public sealed class AgentClientService : IAgentClientService
                         cancellationToken)
                     .ConfigureAwait(false);
 
+                if (TryGetRequestId(
+                    message,
+                    out string requestId))
+                {
+                    if (_pendingRequests.TryRemove(
+                        requestId,
+                        out TaskCompletionSource<
+                            AgentMessage>? completion))
+                    {
+                        completion.TrySetResult(
+                            message);
+                    }
+
+                    continue;
+                }
+
                 MessageReceived?.Invoke(
                     message);
             }
@@ -128,8 +231,95 @@ public sealed class AgentClientService : IAgentClientService
         }
         catch (Exception exception)
         {
+            FailPendingRequests(
+                exception);
+
             ReceiveFailed?.Invoke(
                 exception);
+        }
+    }
+
+    private async Task SendMessageAsync(
+        AgentMessage message,
+        CancellationToken cancellationToken)
+    {
+        await _sendGate.WaitAsync(
+            cancellationToken)
+            .ConfigureAwait(false);
+
+        try
+        {
+            await _connection.SendAsync(
+                message,
+                cancellationToken)
+                .ConfigureAwait(false);
+        }
+        finally
+        {
+            _sendGate.Release();
+        }
+    }
+
+    private static bool TryGetRequestId(
+        AgentMessage message,
+        out string requestId)
+    {
+        requestId = string.Empty;
+
+        if (!message.Payload.TryGetPropertyValue(
+                "request_id",
+                out JsonNode? node) ||
+            node is not JsonValue value ||
+            !value.TryGetValue<string>(
+                out string? candidate) ||
+            string.IsNullOrWhiteSpace(
+                candidate))
+        {
+            return false;
+        }
+
+        requestId = candidate;
+
+        return true;
+    }
+
+
+    private void CancelPendingRequests()
+    {
+        foreach (
+            KeyValuePair<
+                string,
+                TaskCompletionSource<AgentMessage>>
+            item in _pendingRequests)
+        {
+            if (_pendingRequests.TryRemove(
+                item.Key,
+                out TaskCompletionSource<
+                    AgentMessage>? completion))
+            {
+                completion.TrySetCanceled();
+            }
+        }
+    }
+
+
+    private void FailPendingRequests(
+        Exception exception)
+    {
+        foreach (
+            KeyValuePair<
+                string,
+                TaskCompletionSource<AgentMessage>>
+            item in _pendingRequests)
+        {
+            if (_pendingRequests.TryRemove(
+                item.Key,
+                out TaskCompletionSource<
+                    AgentMessage>? completion))
+            {
+                completion.TrySetException(
+                    exception);
+            }
         }
     }
 }
