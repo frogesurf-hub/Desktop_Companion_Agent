@@ -1,9 +1,13 @@
 # Desktop Companion Agent — Phase 4 Task 9 Implementation Plan
 
-Status: Approved Implementation Baseline
+Status: Implementation Complete — Final Checkpoint Pending
 Phase: 4 — Memory System
 Task: 9 — WebSocket Memory Management Protocol
-Repository baseline reviewed: `15b58b1 feat(memory): wire memory health runtime`
+Repository baseline before Task 9E checkpoint:
+`c8cc364 fix(memory): reject incompatible memory list filters`
+
+Current implementation status:
+Task 9A–9E implemented and accepted; final documentation/checkpoint remain
 
 ---
 
@@ -647,6 +651,8 @@ This preserves backward compatibility while supporting deterministic Memory resp
 
 ### Task 9A — Protocol Contract + Runtime Routing Foundation
 
+Status: Completed
+
 Goals:
 
 - accept ADR 0021;
@@ -677,6 +683,8 @@ feat(protocol): add runtime message routing boundary
 
 ### Task 9B — Python Memory Protocol Handler
 
+Status: Completed
+
 Goals:
 
 - implement the five Memory request types;
@@ -701,6 +709,8 @@ feat(memory): add memory governance protocol handler
 ```
 
 ### Task 9C — Runtime / WebSocket Integration
+
+Status: Completed
 
 Goals:
 
@@ -730,6 +740,8 @@ feat(memory): wire websocket governance runtime
 
 ### Task 9D — Desktop Protocol Representation
 
+Status: Completed
+
 Goals:
 
 - add C# protocol constants / payload DTOs / parsers or equivalent;
@@ -754,6 +766,8 @@ feat(desktop): add memory protocol contracts
 ```
 
 ### Task 9E — Cross-Boundary Acceptance + Documentation
+
+Status: Acceptance Completed — Checkpoint Pending
 
 Acceptance should verify:
 
@@ -809,6 +823,38 @@ git diff --check
 dotnet build
 staged review
 ```
+
+Task 9E acceptance results:
+
+```text
+Targeted Python acceptance
+→ 38 passed
+
+Full Python regression
+→ 351 passed
+
+Ruff
+→ All checks passed
+
+mypy
+→ Success: no issues found in 109 source files
+
+git diff --check
+→ clean
+
+Desktop
+→ dotnet build DesktopCompanion.Desktop.slnx
+→ succeeded
+```
+
+Known non-blocking Desktop follow-up:
+
+Python remains the authoritative validator for incompatible
+Memory domain/scope list filters.
+
+Desktop currently validates domain and scope individually.
+Task 10 may add matching client-side early validation while
+building the Memory management workflow.
 
 ---
 
@@ -909,23 +955,20 @@ Task 9 is complete when:
 
 ---
 
-## 20. Planned Checkpoint Sequence
+## 20. Confirmed Checkpoint Progression
 
 ```text
-Task 9A
-feat(protocol): add runtime message routing boundary
+ab0e083 feat(protocol): add runtime message routing boundary
+b4844ab feat(memory): add memory governance protocol handler
+66a51e3 feat(memory): wire websocket governance runtime
+c0c5ecd feat(desktop): add memory protocol contracts
+c8cc364 fix(memory): reject incompatible memory list filters
+```
 
-Task 9B
-feat(memory): add memory governance protocol handler
+Task 9E final checkpoint:
 
-Task 9C
-feat(memory): wire websocket governance runtime
-
-Task 9D
-feat(desktop): add memory protocol contracts
-
-Task 9E
-final acceptance/docs checkpoint if needed
+```text
+test(memory): add websocket governance acceptance
 ```
 
 ---
