@@ -155,6 +155,11 @@ class MemoryProtocolHandler:
             payload.get("scope")
         )
 
+        self._validate_domain_scope_pair(
+            domain,
+            scope,
+        )
+
         entries = await self._governance.list_memories(
             domain=domain,
             scope=scope,
@@ -478,6 +483,27 @@ class MemoryProtocolHandler:
         raise _MemoryProtocolRequestError(
             "unknown Memory scope kind"
         )
+
+
+    @staticmethod
+    def _validate_domain_scope_pair(
+        domain: MemoryDomain | None,
+        scope: MemoryScope | None,
+    ) -> None:
+        if domain is None or scope is None:
+            return
+
+        required_scope = (
+            MemoryScopeKind.CHARACTER
+            if domain is MemoryDomain.RELATIONSHIP
+            else MemoryScopeKind.GLOBAL_USER
+        )
+
+        if scope.kind is not required_scope:
+            raise _MemoryProtocolRequestError(
+                "Memory domain and scope are incompatible"
+            )
+
 
     @staticmethod
     def _serialize_entry(

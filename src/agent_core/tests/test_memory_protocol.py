@@ -542,16 +542,36 @@ def test_memory_history_serializes_revisions() -> None:
                 "content": "   ",
             },
         ),
+        (
+            "memory.list",
+            {
+                "domain": "user_profile",
+                "scope": {
+                    "kind": "character",
+                    "character_id": "aria",
+                },
+            },
+        ),
+        (
+            "memory.list",
+            {
+                "domain": "relationship",
+                "scope": {
+                    "kind": "global_user",
+                },
+            },
+        ),
     ],
 )
 def test_invalid_memory_requests_are_rejected(
     message_type: str,
     payload: dict[str, Any],
 ) -> None:
-    handler = MemoryProtocolHandler(
-        governance=FakeMemoryGovernance()
-    )
+    governance = FakeMemoryGovernance()
 
+    handler = MemoryProtocolHandler(
+        governance=governance
+    )
     response = asyncio.run(
         handler.process_message(
             _request(
@@ -568,6 +588,11 @@ def test_invalid_memory_requests_are_rejected(
         "code": "MEMORY_INVALID_REQUEST",
         "message": "Invalid Memory request.",
     }
+    assert governance.list_calls == []
+    assert governance.inspect_calls == []
+    assert governance.edit_calls == []
+    assert governance.delete_calls == []
+    assert governance.history_calls == []
 
 
 @pytest.mark.parametrize(
