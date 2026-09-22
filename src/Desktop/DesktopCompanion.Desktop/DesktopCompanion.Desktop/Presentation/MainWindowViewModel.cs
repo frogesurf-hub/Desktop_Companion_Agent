@@ -14,12 +14,23 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
 
     private string _inputText = string.Empty;
     private string _connectionStatus = "Disconnected";
-
+    public MemoryManagementViewModel Memory { get; }
     public MainWindowViewModel(
         IAgentClientService agentClientService,
+        MemoryManagementViewModel memory,
         Uri endpoint)
     {
+        ArgumentNullException.ThrowIfNull(
+            agentClientService);
+
+        ArgumentNullException.ThrowIfNull(
+            memory);
+
+        ArgumentNullException.ThrowIfNull(
+            endpoint);
+
         _agentClientService = agentClientService;
+        Memory = memory;
         _endpoint = endpoint;
 
         _agentClientService.MessageReceived +=
@@ -86,10 +97,15 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
                 cancellationToken);
 
             ConnectionStatus = "Connected";
+
+            Memory.RefreshConnectionState();
         }
         catch
         {
             ConnectionStatus = "Connection failed";
+
+            Memory.RefreshConnectionState();
+
             throw;
         }
     }
@@ -126,6 +142,9 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         if (!_agentClientService.IsConnected)
         {
             ConnectionStatus = "Disconnected";
+
+            Memory.RefreshConnectionState();
+
             return;
         }
 
@@ -133,6 +152,8 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
             cancellationToken);
 
         ConnectionStatus = "Disconnected";
+
+        Memory.RefreshConnectionState();
     }
 
     private void OnMessageReceived(
@@ -157,6 +178,8 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
             () =>
             {
                 ConnectionStatus = "Connection error";
+
+                Memory.RefreshConnectionState();
 
                 Messages.Add(
                     $"System: {exception.Message}");

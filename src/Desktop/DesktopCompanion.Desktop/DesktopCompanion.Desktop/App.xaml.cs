@@ -20,9 +20,18 @@ public partial class App : System.Windows.Application
             new AgentClientService(
                 connection);
 
+        IMemoryClientService memoryClientService =
+            new MemoryClientService(
+                agentClientService);
+
+        var memoryViewModel =
+            new MemoryManagementViewModel(
+                memoryClientService);
+
         var viewModel =
             new MainWindowViewModel(
                 agentClientService,
+                memoryViewModel,
                 new Uri(
                     "ws://127.0.0.1:8765"));
 

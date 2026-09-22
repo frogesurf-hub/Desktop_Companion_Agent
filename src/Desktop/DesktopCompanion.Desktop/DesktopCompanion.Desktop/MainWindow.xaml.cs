@@ -54,6 +54,75 @@ public partial class MainWindow : Window
         }
     }
 
+    private async void RefreshMemoryButton_Click(
+        object sender,
+        RoutedEventArgs e)
+    {
+        await _viewModel.Memory.LoadAsync();
+    }
+
+
+    private async void MemoryList_SelectionChanged(
+        object sender,
+        System.Windows.Controls.SelectionChangedEventArgs e)
+    {
+        if (_viewModel.Memory.SelectedMemory is null)
+        {
+            return;
+        }
+
+        await _viewModel.Memory.InspectSelectedAsync();
+    }
+
+
+    private async void SaveMemoryButton_Click(
+        object sender,
+        RoutedEventArgs e)
+    {
+        await _viewModel.Memory.SaveAsync();
+    }
+
+
+    private async void DeleteMemoryButton_Click(
+        object sender,
+        RoutedEventArgs e)
+    {
+        if (_viewModel.Memory.SelectedMemory is null)
+        {
+            return;
+        }
+
+        MessageBoxResult result =
+            MessageBox.Show(
+                "Delete this Memory?",
+                "Delete Memory",
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Warning);
+
+        if (result != MessageBoxResult.Yes)
+        {
+            return;
+        }
+
+        await _viewModel.Memory.DeleteAsync();
+    }
+
+
+    private async void HistoryMemoryButton_Click(
+        object sender,
+        RoutedEventArgs e)
+    {
+        await _viewModel.Memory.LoadHistoryAsync();
+    }
+
+
+    private void CloseHistoryButton_Click(
+        object sender,
+        RoutedEventArgs e)
+    {
+        _viewModel.Memory.HideHistory();
+    }
+
     protected override async void OnClosed(
         EventArgs e)
     {
