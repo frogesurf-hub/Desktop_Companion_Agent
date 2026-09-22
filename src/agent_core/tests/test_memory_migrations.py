@@ -4,6 +4,10 @@ from alembic import command
 from alembic.config import Config
 from sqlalchemy import create_engine, inspect, text
 
+from agent_core.memory.persistence import (
+    upgrade_memory_database,
+)
+
 
 def _build_alembic_config(
     database_path: Path,
@@ -220,6 +224,97 @@ def test_identity_key_migration_preserves_legacy_memory(
             ).scalar_one()
 
         assert identity_key is None
+
+    finally:
+        engine.dispose()
+
+
+def test_runtime_memory_database_upgrade_bootstraps_empty_database(
+    tmp_path: Path,
+) -> None:
+    database_path = (
+        tmp_path
+        / "runtime"
+        / "memory.db"
+    )
+
+    upgrade_memory_database(
+        database_path
+    )
+
+    engine = create_engine(
+        "sqlite:///"
+        f"{database_path.resolve().as_posix()}"
+    )
+
+    try:
+        inspector = inspect(
+            engine
+        )
+
+        assert {
+            "alembic_version",
+            "memories",
+            "memory_revisions",
+        }.issubset(
+            set(
+                inspector.get_table_names()
+            )
+        )
+
+        with engine.connect() as connection:
+            version = connection.execute(
+                text(
+                    """
+                    SELECT version_num
+                    FROM alembic_version
+                    """
+                )
+            ).scalar_one()
+
+        assert version == (
+            "0003_identity_unique"
+        )
+
+    finally:
+        engine.dispose()
+
+
+def test_runtime_memory_database_upgrade_is_idempotent(
+    tmp_path: Path,
+) -> None:
+    database_path = (
+        tmp_path
+        / "memory.db"
+    )
+
+    upgrade_memory_database(
+        database_path
+    )
+
+    upgrade_memory_database(
+        database_path
+    )
+
+    engine = create_engine(
+        "sqlite:///"
+        f"{database_path.resolve().as_posix()}"
+    )
+
+    try:
+        with engine.connect() as connection:
+            version = connection.execute(
+                text(
+                    """
+                    SELECT version_num
+                    FROM alembic_version
+                    """
+                )
+            ).scalar_one()
+
+        assert version == (
+            "0003_identity_unique"
+        )
 
     finally:
         engine.dispose()

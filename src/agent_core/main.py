@@ -39,6 +39,7 @@ from agent_core.memory.persistence import (
     SQLiteMemoryRepository,
     create_memory_engine,
     create_memory_session_factory,
+    upgrade_memory_database,
 )
 from agent_core.memory.protocol import (
     MemoryProtocolHandler,
@@ -173,6 +174,10 @@ async def run() -> None:
 
     composer = PromptContextComposer()
     clock = SystemClock()
+
+    upgrade_memory_database(
+        settings.memory_database_path,
+    )
 
     memory_engine = create_memory_engine(
         settings.memory_database_path,

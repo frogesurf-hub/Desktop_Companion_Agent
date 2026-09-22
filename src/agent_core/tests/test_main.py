@@ -193,6 +193,7 @@ def _install_runtime_fakes(
     event_bus_start_error: Exception | None = None,
     event_bus_close_error: Exception | None = None,
     character_load_error: Exception | None = None,
+    memory_upgrade_error: Exception | None = None,
 ) -> CharacterDefinition:
     """
     替换 Composition Root 外部组件，
@@ -352,7 +353,24 @@ def _install_runtime_fakes(
             )
         )
 
+    def fake_upgrade_memory_database(
+        database_path: Path,
+    ) -> None:
+        calls.append(
+            (
+                "memory_upgrade",
+                database_path,
+            )
+        )
 
+        if memory_upgrade_error is not None:
+            raise memory_upgrade_error
+
+    monkeypatch.setattr(
+        main_module,
+        "upgrade_memory_database",
+        fake_upgrade_memory_database,
+    )
 
     monkeypatch.setattr(
         main_module,
@@ -508,14 +526,15 @@ def test_run_initializes_deepseek_and_event_runtime(
 
     1. 读取 Settings
     2. 初始化 Logging
-    3. 创建 DeepSeek Provider
-    4. 创建 Event Bus
-    5. 注入 Agent
-    6. 创建 WebSocketServer
-    7. 启动 Event Bus
-    8. 启动 Server
-    9. 关闭 Event Bus
-    10. 关闭 Provider
+    3. 升级 Memory database schema
+    4. 创建 DeepSeek Provider
+    5. 创建 Event Bus
+    6. 注入 Agent
+    7. 创建 WebSocketServer
+    8. 启动 Event Bus
+    9. 启动 Server
+    10. 关闭 Event Bus
+    11. 关闭 Provider
     """
 
     calls: list[
@@ -545,6 +564,11 @@ def test_run_initializes_deepseek_and_event_runtime(
     )
 
     assert calls[2] == (
+        "memory_upgrade",
+        settings.memory_database_path,
+    )
+
+    assert calls[3] == (
         "provider_init",
         {
             "api_key": "test-secret-key",
@@ -554,14 +578,14 @@ def test_run_initializes_deepseek_and_event_runtime(
         },
     )
 
-    assert calls[3] == (
+    assert calls[4] == (
         "event_bus_init",
         17,
     )
 
-    assert calls[4][0] == "agent_init"
+    assert calls[5][0] == "agent_init"
 
-    agent_init = calls[4][1]
+    agent_init = calls[5][1]
 
     assert isinstance(
         agent_init,
@@ -608,9 +632,9 @@ def test_run_initializes_deepseek_and_event_runtime(
         is memory_learner._health
     )
 
-    assert calls[5][0] == "server_init"
+    assert calls[6][0] == "server_init"
 
-    server_init = calls[5][1]
+    server_init = calls[6][1]
 
     assert isinstance(
         server_init,
@@ -652,22 +676,22 @@ def test_run_initializes_deepseek_and_event_runtime(
         is memory_learner._health
     )
 
-    assert calls[6] == (
+    assert calls[7] == (
         "event_bus_start",
         None,
     )
 
-    assert calls[7] == (
+    assert calls[8] == (
         "server_run",
         None,
     )
 
-    assert calls[8] == (
+    assert calls[9] == (
         "event_bus_close",
         None,
     )
 
-    assert calls[9] == (
+    assert calls[10] == (
         "provider_close",
         None,
     )
@@ -886,4 +910,46 @@ def test_run_disables_automatic_memory_learning_when_configured(
     assert isinstance(
         agent_init["memory_retriever"],
         ResilientMemoryRetriever,
+    )
+
+
+def test_provider_is_not_created_when_memory_upgrade_fails(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[
+        tuple[str, object]
+    ] = []
+
+    settings = _make_settings()
+
+    _install_runtime_fakes(
+        monkeypatch,
+        calls,
+        settings,
+        memory_upgrade_error=RuntimeError(
+            "memory migration failed",
+        ),
+    )
+
+    with pytest.raises(
+        RuntimeError,
+        match="memory migration failed",
+    ):
+        asyncio.run(
+            main_module.run(),
+        )
+
+    assert (
+        "memory_upgrade",
+        settings.memory_database_path,
+    ) in calls
+
+    assert not any(
+        name == "provider_init"
+        for name, _ in calls
+    )
+
+    assert not any(
+        name == "event_bus_init"
+        for name, _ in calls
     )
