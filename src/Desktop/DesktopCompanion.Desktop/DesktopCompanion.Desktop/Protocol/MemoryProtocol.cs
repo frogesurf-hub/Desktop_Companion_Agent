@@ -156,6 +156,10 @@ public static class MemoryProtocol
         ValidateScope(
             scope);
 
+        ValidateDomainScopePair(
+            domain,
+            scope);
+
         return CreateRequest(
             MessageTypes.List,
             new MemoryListRequestPayload
@@ -347,6 +351,30 @@ public static class MemoryProtocol
         }
 
         return parsed.ToString();
+    }
+
+    private static void ValidateDomainScopePair(
+        string? domain,
+        MemoryScopePayload? scope)
+    {
+        if (domain is null || scope is null)
+        {
+            return;
+        }
+
+        string requiredScopeKind =
+            domain == Domains.Relationship
+                ? ScopeKinds.Character
+                : ScopeKinds.GlobalUser;
+
+        if (!string.Equals(
+            scope.Kind,
+            requiredScopeKind,
+            StringComparison.Ordinal))
+        {
+            throw new ArgumentException(
+                "Memory domain and scope are incompatible.");
+        }
     }
 
     private static void ValidateScope(
