@@ -1,9 +1,17 @@
 # Desktop Companion Agent — Phase 4 Task 11 Runtime Acceptance Plan
 
-Status: Proposed Acceptance Baseline
+Status: Completed
 Phase: 4 — Memory System
 Task: 11 — Phase 4 Runtime Acceptance
-Repository baseline reviewed: `3b9aa2b docs(memory): close task 10 acceptance`
+
+Repository baseline reviewed:
+`3b9aa2b docs(memory): close task 10 acceptance`
+
+Task 11 implementation checkpoint reviewed:
+`eb57eb4 test(memory): add integrated runtime lifecycle acceptance`
+
+Current acceptance status:
+Task 11A–11D completed and accepted
 
 ---
 
@@ -90,10 +98,17 @@ Phase 4 Memory System verified as one integrated runtime capability
 
 ## 3. Current Repository Reality
 
-Repository HEAD reviewed:
+Task 11 began from:
 
 ```text
 3b9aa2b docs(memory): close task 10 acceptance
+```
+
+Task 11 acceptance implementation reached:
+
+```text
+5d47e1b docs(memory): add task 11 runtime acceptance plan
+eb57eb4 test(memory): add integrated runtime lifecycle acceptance
 ```
 
 Task 10 closure already records:
@@ -179,17 +194,25 @@ Agent receives PreparedMemoryContext
 → provider request contains [Memory Context]
 ```
 
-Important current limitation:
+Task 11B closed the remaining integration gap with:
 
 ```text
-retrieval correctness
-and
-Agent/composer prompt injection
-are already proven separately
+src/agent_core/tests/test_memory_runtime_acceptance.py
+```
 
-but a single acceptance path from
-SQLite → Retrieval → Agent → Provider request
-is not yet clearly covered as one integration scenario
+The accepted deterministic path is now:
+
+```text
+SQLite
+→ persistence runtime restart
+→ MemoryRetrievalService
+→ Agent
+→ PromptContextComposer
+→ FakeLLMProvider actual request
+→ Governance edit
+→ corrected retrieval
+→ Governance delete
+→ deleted fact absent from retrieval and provider prompt
 ```
 
 ### Governance and persistence
@@ -879,25 +902,22 @@ User-visible Memory content inside the explicitly opened Memory management UI is
 
 ---
 
-## 11. Expected Task 11 Checkpoints
-
-Proposed sequence:
+## 11. Confirmed Task 11 Checkpoints
 
 ```text
 Task 11A
-docs(memory): add task 11 runtime acceptance plan
+5d47e1b docs(memory): add task 11 runtime acceptance plan
 
 Task 11B
-test(memory): add integrated runtime lifecycle acceptance
+eb57eb4 test(memory): add integrated runtime lifecycle acceptance
 
 Task 11C
 manual real-runtime acceptance
+(no product source commit required)
 
 Task 11D
-docs(memory): complete phase 4 runtime acceptance
+this documentation closure checkpoint
 ```
-
-Exact final messages may change after implementation review.
 
 ---
 
@@ -926,6 +946,10 @@ Task 11 is complete when all of the following are true:
 19. Desktop build passes.
 20. Repository acceptance state is documented and checkpointed.
 
+All 20 completion criteria were accepted by automated evidence,
+real Runtime acceptance, final quality gates, or previously accepted
+Task 9/10 evidence explicitly reused by this plan.
+
 ---
 
 ## 13. Capability Delta
@@ -945,3 +969,402 @@ restart-safe, governable, failure-isolated runtime capability
 ```
 
 That accepted state becomes the input to Task 12 final documentation and Phase 4 closure.
+
+---
+
+## 14. Actual Task 11B Integrated Acceptance Result
+
+Task 11B added:
+
+```text
+src/agent_core/tests/test_memory_runtime_acceptance.py
+```
+
+Targeted validation result:
+
+```text
+pytest
+→ 1 passed
+
+Ruff
+→ All checks passed
+
+mypy
+→ Success: no issues found in 1 source file
+```
+
+The test deterministically proves:
+
+```text
+temporary SQLite DB
+→ schema upgrade
+→ Memory persisted
+→ first engine disposed
+→ second engine / repository created
+→ same Memory recovered
+→ real MemoryRetrievalService
+→ real Agent
+→ real PromptContextComposer
+→ FakeLLMProvider actual request contains Memory
+→ governance edit
+→ old revision SUPERSEDED
+→ corrected revision ACTIVE
+→ corrected value reaches provider request
+→ governance delete
+→ deleted content removed
+→ Retrieval empty
+→ provider prompt no longer contains Memory context
+```
+
+This is a persistence-runtime restart boundary, not a substitute for
+the real Core process restart accepted in Task 11C.
+
+---
+
+## 15. Actual Task 11C Real Runtime Acceptance
+
+Task 11C used a dedicated temporary database:
+
+```text
+data/task11_acceptance.db
+```
+
+The primary development Memory database was not used for acceptance-only state.
+
+### 15.1 Run A — Automatic Learning
+
+A fresh Runtime started with:
+
+```text
+DCA_MEMORY_DATABASE_PATH=data/task11_acceptance.db
+DCA_AUTOMATIC_LEARNING_ENABLED=true
+```
+
+The Runtime automatically upgraded the fresh database through:
+
+```text
+0001_memory
+→ 0002_identity_key
+→ 0003_identity_unique
+```
+
+The WPF client connected successfully.
+
+The explicit test fact:
+
+```text
+Task11 acceptance code = ORBIT-4729
+```
+
+was learned as:
+
+```text
+domain = working_context
+scope = global_user
+source = automatic_explicit_fact
+lifecycle = active
+```
+
+Accepted real path:
+
+```text
+WPF
+→ WebSocket
+→ Agent
+→ DeepSeek
+→ automatic candidate extraction
+→ learning eligibility / persistence
+→ SQLite
+→ governance
+→ WPF Memory UI
+```
+
+### 15.2 Run B — Real Core Restart and Retrieval
+
+The Python Core process was fully stopped and a new Python Runtime
+was started against the same `task11_acceptance.db`.
+
+After reconnect, the `ORBIT-4729` Memory remained present.
+
+A later user question did not include the answer, and the real Agent
+returned `ORBIT-4729`.
+
+Together with Task 11B deterministic provider-request inspection, this accepts:
+
+```text
+durable SQLite Memory
+→ Core process restart
+→ Retrieval
+→ PreparedMemoryContext
+→ PromptContextComposer
+→ real Provider
+→ WPF response
+```
+
+### 15.3 Run C — Non-Explicit Input and Correction
+
+A normal knowledge question about a binary tree produced a normal response.
+
+After Memory Refresh:
+
+```text
+Memory count unchanged
+→ no new durable Memory
+```
+
+The existing Memory was then edited through WPF:
+
+```text
+Revision 1
+ORBIT-4729
+→ SUPERSEDED
+
+Revision 2
+NOVA-8306
+→ ACTIVE
+→ source = user_edit
+```
+
+A later real chat request returned `NOVA-8306`.
+
+### 15.4 Run D — Automatic Learning Disabled
+
+The same Runtime database was restarted with:
+
+```text
+DCA_AUTOMATIC_LEARNING_ENABLED=false
+```
+
+Existing Memory remained retrievable and ordinary chat remained available.
+
+A new explicit-looking fact:
+
+```text
+Task11 second acceptance marker = NEBULA-1942
+```
+
+did not create a new Memory entry.
+
+Governance edit remained functional:
+
+```text
+Revision 1
+ORBIT-4729
+→ SUPERSEDED
+
+Revision 2
+NOVA-8306
+→ SUPERSEDED
+
+Revision 3
+AURORA-2604
+→ ACTIVE
+→ source = user_edit
+```
+
+The real Agent returned `AURORA-2604`.
+
+Finally, the Memory was deleted through WPF. A later request explicitly
+constrained to currently available Memory reported that no Task11
+acceptance-code Memory was available.
+
+This user-facing result is consistent with the deterministic Task 11B proof
+that deleted content no longer reaches retrieval or the provider prompt.
+
+---
+
+## 16. Runtime Incidents Observed During Acceptance
+
+Two external network interruptions occurred while using a mobile hotspot.
+
+The Desktop received the existing safe Provider error:
+
+```text
+AI provider is temporarily unavailable.
+```
+
+After network recovery, normal chat resumed.
+
+Classification:
+
+```text
+External Provider / Network Environment Issue
+```
+
+This was not classified as a Memory implementation defect.
+
+It also reconfirmed that Provider connectivity failures remain mapped to
+safe user-facing protocol errors.
+
+An abrupt WPF / WebSocket shutdown also produced the already-known
+missing-close-handshake message. This remains known shutdown-hardening debt
+and did not invalidate Memory persistence or acceptance.
+
+During one restart attempt, the Desktop `.csproj` again contained accidental
+local trailing content after the XML root and failed with `MSB4025`.
+The tracked file was restored from Git and the Desktop build passed.
+No Task 11 product source change was required.
+
+---
+
+## 17. Final Quality Gates
+
+Observed final results:
+
+```text
+Full Python regression
+→ 355 passed in 10.03s
+
+Ruff
+→ All checks passed
+
+mypy
+→ Success: no issues found in 111 source files
+
+Desktop
+→ dotnet build DesktopCompanion.Desktop.slnx
+→ succeeded
+
+git diff --check
+→ clean
+
+git status --short
+→ clean
+```
+
+The acceptance-only environment variables were removed after the runtime test.
+
+The temporary database:
+
+```text
+data/task11_acceptance.db
+```
+
+was removed after acceptance.
+
+Final Git status remained clean before documentation closure.
+
+---
+
+## 18. Final Log-Safety Acceptance
+
+The runtime log was searched for all Task 11 marker values:
+
+```text
+ORBIT-4729
+NOVA-8306
+AURORA-2604
+NEBULA-1942
+```
+
+Result:
+
+```text
+no matches
+```
+
+A broad search for `Authorization` returned historical HTTP status lines such as:
+
+```text
+HTTP/1.1 401 Authorization Required
+```
+
+These were HTTP status descriptions, not Authorization request headers
+or credentials.
+
+A stricter search for:
+
+```text
+Authorization\s*:
+Bearer <token-like value>
+api[_-]?key[:=]
+reasoning_content
+```
+
+returned:
+
+```text
+no matches
+```
+
+A separate search for:
+
+```text
+raw response
+response body
+request body
+system prompt
+user prompt
+```
+
+also returned:
+
+```text
+no matches
+```
+
+Task 11 therefore accepts that the inspected runtime logs did not expose:
+
+```text
+Task 11 factual Memory contents
+Authorization headers
+Bearer credentials
+API keys
+reasoning content
+raw request/response bodies
+system prompts
+user prompts
+```
+
+---
+
+## 19. Final Acceptance Matrix
+
+```text
+A  Automatic Learning                 ACCEPTED
+B  Persistence Across Core Restart    ACCEPTED
+C  Retrieval + Prompt Use             ACCEPTED
+D  Revision / Correction              ACCEPTED
+E  Delete Semantics                   ACCEPTED
+F  Domain / Scope Isolation           ACCEPTED
+G  Automatic Learning Disabled        ACCEPTED
+H  Failure Isolation                  ACCEPTED
+I  WebSocket Governance               ACCEPTED
+J  WPF Governance UI                  ACCEPTED
+K  Regression                         ACCEPTED
+```
+
+Evidence combines:
+
+```text
+Task 7–10 targeted automated tests
+Task 9 WebSocket acceptance
+Task 10 real WPF acceptance
+Task 11B deterministic lifecycle integration
+Task 11C real Core / WPF / Provider runtime acceptance
+Task 11 final quality gates
+Task 11 log-safety inspection
+```
+
+No unresolved Phase 4 Memory defect was found during final Task 11 acceptance.
+
+---
+
+## 20. Task 11 Closure
+
+Task 11 changes the project state from:
+
+```text
+Phase 4 Memory components implemented and separately accepted
+```
+
+to:
+
+```text
+Phase 4 Memory System accepted as a coherent,
+restart-safe, governable, failure-isolated runtime capability
+```
+
+Task 12 may now treat the Phase 4 runtime behavior as accepted baseline
+and proceed with final Phase 4 documentation, state synchronization,
+checkpoint creation, and transition context.
