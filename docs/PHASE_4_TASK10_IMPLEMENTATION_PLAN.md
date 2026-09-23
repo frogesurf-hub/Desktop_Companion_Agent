@@ -1,9 +1,14 @@
 # Desktop Companion Agent — Phase 4 Task 10 Implementation Plan
 
-Status: Approved Implementation Baseline
+Status: Completed
 Phase: 4 — Memory System
 Task: 10 — Simple WPF Memory Management UI
-Repository baseline reviewed: `0bd1812 test(memory): add websocket governance acceptance`
+
+Repository implementation completion checkpoint:
+`94cce5d fix(memory): bootstrap runtime database schema`
+
+Current implementation status:
+Task 10A–10E completed and accepted
 
 ---
 
@@ -921,10 +926,155 @@ actual test/build results
 known non-blocking follow-ups
 ```
 
-Suggested final checkpoint:
+### 9.5 Actual Runtime Acceptance Results
+
+Task 10 was accepted against the real Python Core and WPF Desktop runtime.
+
+Confirmed workflow:
 
 ```text
-test(desktop): accept memory management workflow
+WPF Connect
+→ Connected
+
+Chat
+→ normal Agent response
+→ existing chat workflow preserved
+
+Explicit user fact
+→ Automatic Memory Learning
+→ USER_PROFILE / GLOBAL_USER Memory
+→ source = automatic_explicit_fact
+→ durable SQLite persistence
+
+Memory Refresh
+→ list loads
+
+Select Memory
+→ inspect detail loads
+
+Edit
+→ server commits USER_EDIT revision
+→ UI updates committed content
+
+History
+→ persisted revision chain displayed
+→ superseded revisions + latest ACTIVE revision visible
+
+Delete
+→ confirmation
+→ server commits delete semantics
+→ Memory disappears from normal list
+
+Refresh after delete
+→ explicit empty state
+→ deleted fact remains absent
+
+Restart WPF
+→ reconnect succeeds
+→ Memory list reloads persisted state
+
+Memory failure
+→ safe visible failure state
+→ ordinary chat remains usable
+```
+
+The first real acceptance run exposed a runtime persistence bootstrap defect:
+
+```text
+data/memory.db existed
+but contained no Memory schema
+
+→ Retrieval failed with OperationalError
+→ Automatic Learning failed with OperationalError
+→ Governance failed with OperationalError
+→ chat remained available through Task 8 fail-open behavior
+```
+
+Root cause:
+
+```text
+Runtime opened SQLite
+→ Repository became available
+→ but Alembic migrations had never been applied
+```
+
+The defect was fixed in:
+
+```text
+94cce5d fix(memory): bootstrap runtime database schema
+```
+
+Final startup order:
+
+```text
+Settings
+→ Logging
+→ upgrade Memory database to Alembic head
+→ create Memory engine
+→ create Repository
+→ Retrieval / Learning / Governance
+→ Provider / EventBus / WebSocket runtime
+```
+
+A fresh temporary runtime database was then accepted without any manual Alembic command:
+
+```text
+python -m agent_core.main
+→ Runtime automatically ran:
+   0001_memory
+   → 0002_identity_key
+   → 0003_identity_unique
+
+Database contained:
+→ alembic_version
+→ memories
+→ memory_revisions
+
+Alembic head:
+→ 0003_identity_unique
+```
+
+### 9.6 Final Quality Gates
+
+Observed final results:
+
+```text
+Full Python regression
+→ 354 passed
+
+Ruff
+→ All checks passed
+
+mypy
+→ Success: no issues found in 110 source files
+
+Desktop
+→ dotnet build DesktopCompanion.Desktop.slnx
+→ succeeded
+
+git diff --check
+→ clean
+
+Real WPF runtime acceptance
+→ passed
+
+Fresh Runtime database bootstrap
+→ passed
+```
+
+### 9.7 Known Non-Blocking Follow-ups
+
+```text
+Visual polish
+→ intentionally deferred beyond the first Memory governance UI
+
+Standalone packaging
+→ future packaged builds must distribute Alembic migration resources
+   together with the Python runtime
+
+Explicit Disconnect UI
+→ not introduced by Task 10;
+   connection-state guards already prevent invalid Memory operations
 ```
 
 ---
@@ -1304,28 +1454,40 @@ Task 10 is complete when:
 19. Manual real-runtime Memory workflow passes.
 20. Task 10 documentation is synchronized and checkpointed.
 
+All 20 completion criteria were accepted by implementation review,
+automated quality gates, or real WPF/Python runtime acceptance.
+
 ---
 
-## 21. Planned Checkpoint Sequence
+## 21. Confirmed Checkpoint Progression
+
+```text
+4ee3c5e feat(desktop): add correlated agent requests
+3ca8091 feat(desktop): add memory application service
+ccc6397 feat(desktop): add memory management view model
+804ddc2 feat(desktop): add memory management ui
+94cce5d fix(memory): bootstrap runtime database schema
+```
+
+Task 10 capability progression:
 
 ```text
 Task 10A
-feat(desktop): add correlated agent requests
+Desktop request/response correlation
 
 Task 10B
-feat(desktop): add memory application service
+Typed Memory application service
 
 Task 10C
-feat(desktop): add memory management view model
+Memory governance presentation state
 
 Task 10D
-feat(desktop): add memory management ui
+Usable WPF Memory management surface
 
 Task 10E
-test(desktop): accept memory management workflow
+Real runtime acceptance
++ runtime database bootstrap defect correction
 ```
-
-Exact commit messages may change to match final implementation.
 
 ---
 
