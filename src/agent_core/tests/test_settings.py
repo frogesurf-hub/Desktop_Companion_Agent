@@ -1,6 +1,7 @@
 from pathlib import Path
 
 import pytest
+from platformdirs import user_data_path
 from pydantic import ValidationError
 
 from agent_core.config import Settings
@@ -22,6 +23,7 @@ DCA_ENVIRONMENT_VARIABLES = [
     "DCA_DEEPSEEK_THINKING_ENABLED",
     "DCA_LOG_LEVEL",
     "DCA_AUTOMATIC_LEARNING_ENABLED",
+    "DCA_MEMORY_DATABASE_PATH",
 ]
 
 
@@ -89,6 +91,20 @@ def test_settings_default_values(
 
     assert settings.automatic_learning_enabled is True
 
+    expected_memory_database_path = (
+        user_data_path(
+            appname="Desktop Companion Agent",
+            appauthor=False,
+            roaming=False,
+        )
+        / "memory.db"
+    )
+
+    assert (
+        settings.memory_database_path
+        == expected_memory_database_path
+    )
+
 
 def test_environment_variables_override_defaults(
     monkeypatch: pytest.MonkeyPatch,
@@ -100,6 +116,17 @@ def test_environment_variables_override_defaults(
 
     clear_dca_environment(
         monkeypatch,
+    )
+
+    memory_database_path = (
+        tmp_path
+        / "memory"
+        / "custom.db"
+    )
+
+    monkeypatch.setenv(
+        "DCA_MEMORY_DATABASE_PATH",
+        str(memory_database_path),
     )
 
     monkeypatch.chdir(
@@ -167,6 +194,11 @@ def test_environment_variables_override_defaults(
     )
 
     settings = Settings()
+
+    assert (
+        settings.memory_database_path
+        == memory_database_path
+    )
 
     assert settings.runtime_mode == "local"
 

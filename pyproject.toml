@@ -21,6 +21,7 @@ dependencies = [
     "sqlalchemy",
     "aiosqlite",
     "alembic",
+    "platformdirs>=4.0",
     "openai>=3.10.0,<4",
 ]
 

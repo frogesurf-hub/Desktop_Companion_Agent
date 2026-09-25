@@ -2,8 +2,29 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 
+from platformdirs import user_data_path
 from pydantic import Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+_APPLICATION_DATA_NAME = (
+    "Desktop Companion Agent"
+)
+
+
+def _default_memory_database_path() -> Path:
+    """
+    返回当前操作系统用户级应用数据目录中的
+    默认 Memory SQLite 路径。
+    """
+
+    return (
+        user_data_path(
+            appname=_APPLICATION_DATA_NAME,
+            appauthor=False,
+            roaming=False,
+        )
+        / "memory.db"
+    )
 
 
 class Settings(BaseSettings):
@@ -55,8 +76,8 @@ class Settings(BaseSettings):
         le=30,
     )
     
-    memory_database_path: Path = Path(
-        "data/memory.db"
+    memory_database_path: Path = Field(
+        default_factory=_default_memory_database_path,
     )
 
     automatic_learning_enabled: bool = True
