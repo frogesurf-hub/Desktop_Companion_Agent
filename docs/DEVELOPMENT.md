@@ -49,7 +49,7 @@ Python 3.11.x
 
 ### Install Project and Development Dependencies
 
-The canonical development installation is:
+Canonical development installation:
 
 ```powershell
 pip install -e ".[dev]"
@@ -57,17 +57,19 @@ pip install -e ".[dev]"
 
 This installs:
 
-- runtime dependencies declared in `pyproject.toml`
-- development dependencies from the `dev` extra (`pytest`, `ruff`, `mypy`)
-- the current project in editable mode
+- runtime dependencies declared in `pyproject.toml`;
+- development dependencies from the `dev` extra (`pytest`, `ruff`, `mypy`);
+- the current project in editable mode.
 
-`pyproject.toml` is the canonical Python dependency source. `src/agent_core/requirements.txt` is legacy duplicate metadata and must not receive new dependency declarations. Retire or remove it only in a dedicated maintenance task.
+`pyproject.toml` is the canonical Python dependency source.
+
+`src/agent_core/requirements.txt` remains legacy duplicate metadata and must not receive new dependency declarations. Retire or remove it only in a dedicated maintenance task.
 
 ---
 
 ## 2. Project Structure
 
-Phase 2 high-level structure:
+Phase 4 high-level structure:
 
 ```text
 Desktop_Companion_Agent
@@ -75,28 +77,35 @@ Desktop_Companion_Agent
 │   ├── adr
 │   ├── COMMUNICATION_PROTOCOL.md
 │   ├── DEVELOPMENT.md
+│   ├── DEVELOPMENT_UNDERSTANDING.md
 │   ├── PHASE_0_CHECKPOINT.md
 │   ├── PHASE_1_CHECKPOINT.md
-│   ├── PHASE_1_PROVIDER_LAYER_DESIGN.md
-│   ├── PHASE_1_DEEPSEEK_ADAPTER_DESIGN.md
-│   ├── PHASE_2_ARCHITECTURE_REVIEW.md
 │   ├── PHASE_2_CHECKPOINT.md
-│   ├── PHASE_2_EVENT_SYSTEM_DESIGN.md
-│   └── PHASE_2_TASK_PLAN.md
+│   ├── PHASE_3_CHECKPOINT.md
+│   ├── PHASE_4_MEMORY_SYSTEM_DESIGN.md
+│   ├── PHASE_4_TASK8_TASK12_ARCHITECTURE_PLAN.md
+│   ├── PHASE_4_TASK10_IMPLEMENTATION_PLAN.md
+│   └── PHASE_4_TASK11_RUNTIME_ACCEPTANCE_PLAN.md
+├── migrations
 ├── src
 │   ├── agent_core
+│   │   ├── characters
 │   │   ├── communication
+│   │   ├── composition
 │   │   ├── config
 │   │   ├── core
 │   │   ├── events
+│   │   ├── memory
 │   │   ├── observability
 │   │   ├── providers
+│   │   ├── temporal
 │   │   ├── tests
 │   │   └── main.py
 │   └── Desktop
 │       └── DesktopCompanion.Desktop
 ├── tools
 │   └── DesktopCompanion.ConnectionProbe
+├── alembic.ini
 ├── .editorconfig
 ├── .env.example
 ├── .gitignore
@@ -114,26 +123,34 @@ Desktop_Companion_Agent
 
 Responsibilities:
 
-- `src/agent_core/`: Python Agent Core runtime and tests.
-- `src/Desktop/`: C# WPF desktop application.
-- `tools/DesktopCompanion.ConnectionProbe/`: transport/protocol diagnostic client.
-- `docs/`: technical documentation, checkpoint history, and ADRs.
-- `pyproject.toml`: Python project metadata, dependencies, pytest, Ruff, and mypy configuration.
-- `PROJECT_STATE.md`: primary context-recovery / current-state document.
+- `src/agent_core/`: Python Agent Core runtime and tests;
+- `src/agent_core/memory/`: factual Memory domain, retrieval, learning, governance, health, protocol, and persistence boundaries;
+- `migrations/`: Alembic Memory schema evolution;
+- `src/Desktop/`: C# WPF desktop application;
+- `tools/DesktopCompanion.ConnectionProbe/`: transport/protocol diagnostic client;
+- `docs/`: technical documentation, task plans, checkpoint history, and ADRs;
+- `pyproject.toml`: canonical Python project metadata, runtime dependencies, development dependencies, pytest, Ruff, and mypy configuration;
+- `PROJECT_STATE.md`: primary current-state recovery document;
 - root Markdown files: project-level architecture, design, roadmap, technology, and third-party policies.
 
-Completed cleanup: the C# protocol source folder was renamed from `Potocol/` to `Protocol/` in commit `81d2747`.
+Repository code and the latest confirmed Git commit are authoritative when older design/checkpoint documents describe an earlier implementation state.
 
 ---
 
 ## 3. Development Workflow
 
-Every development task should follow this sequence:
+Normal development sequence:
 
 ```text
-Requirement Analysis
+Context Recovery
+        ↓
+Requirement / Goal
+        ↓
+System Position / Boundary
         ↓
 Design
+        ↓
+ADR when justified
         ↓
 Task Breakdown
         ↓
@@ -141,14 +158,33 @@ Implementation
         ↓
 Targeted Tests
         ↓
-Code Quality Checks
+Ruff / mypy
         ↓
-Documentation Update
+Working Diff Review
         ↓
-Git Commit
+Stage Explicit Files
+        ↓
+Staged Diff Review
+        ↓
+Commit
+        ↓
+Push
 ```
 
-Do not skip directly from an idea to implementation when the change affects architecture, interfaces, permissions, data models, or persistent state.
+Do not skip directly from an idea to implementation when a change affects:
+
+```text
+architecture
+public interfaces
+permissions
+persistent data
+protocol contracts
+runtime ownership
+failure semantics
+cross-process behavior
+```
+
+At a major Task or Phase boundary, also perform documentation synchronization and a recovery/checkpoint review.
 
 ---
 
@@ -159,240 +195,436 @@ Do not skip directly from an idea to implementation when the change affects arch
 From the repository root:
 
 ```powershell
-pytest
+python -m pytest -q
 ```
 
-Expected behavior:
+pytest reads project configuration from `pyproject.toml`.
 
-- pytest automatically reads `pyproject.toml`
-- tests are discovered under `src/agent_core/tests`
-- no manual `PYTHONPATH` configuration is required
+Tests are discovered under:
+
+```text
+src/agent_core/tests
+```
+
+No manual `PYTHONPATH` setup should be required after editable installation.
 
 ### Testing Principle
 
-For normal development:
+For normal implementation tasks:
 
-- run tests directly related to the current change
-- add or update tests for changed behavior
-- do not rely only on manual testing
+- run tests directly related to the current change;
+- add or update tests for changed behavior;
+- run directly relevant Ruff / mypy checks;
+- do not rely only on manual testing;
+- do not automatically run the entire suite after every small edit.
 
-For AI-assisted development:
+For phase-final or runtime-acceptance work:
 
-- Codex / Claude / GPT should run targeted tests related to their modifications
-- they should not run the full test suite unless explicitly requested
-- the complete test suite is reserved for final acceptance by the project owner
+- run the complete Python regression;
+- run full Ruff;
+- run full mypy;
+- build Desktop when relevant;
+- perform real-runtime acceptance when the behavior crosses process/runtime boundaries.
+
+The project owner performs final integration review and phase-final acceptance.
 
 ---
 
 ## 5. Python Code Quality
 
-### Ruff Check
+### Ruff
 
 Run:
 
 ```powershell
-ruff check .
+python -m ruff check .
 ```
 
 Purpose:
 
-- detect unused imports
-- detect common Python mistakes
-- enforce basic style consistency
-- catch maintainability issues early
+- detect unused imports;
+- detect common Python mistakes;
+- enforce import/style consistency;
+- catch maintainability issues early.
 
-### Ruff Format
-
-Run:
+Use automatic fixing only for clearly mechanical issues:
 
 ```powershell
-ruff format .
+python -m ruff check <paths> --fix
 ```
 
-Purpose:
+Review resulting diffs before staging.
 
-- automatically normalize Python formatting
+### Formatting
 
-Before formatting a large change, review the affected files first.
+If formatting is required:
+
+```powershell
+python -m ruff format <paths>
+```
+
+Do not reformat unrelated files as part of a focused change.
 
 ### Type Check
 
 Run:
 
 ```powershell
-mypy src
+python -m mypy src
 ```
 
 Purpose:
 
-- detect invalid type assumptions
-- improve interface clarity
-- reduce runtime errors in a growing codebase
+- detect invalid type assumptions;
+- improve interface clarity;
+- reduce runtime errors;
+- protect explicit cross-module contracts.
 
-Type checking may be introduced gradually. Existing modules do not need to become fully strict immediately, but new public interfaces should prefer explicit type annotations.
+New public boundaries should prefer explicit typing.
 
 ---
 
 ## 6. C# / WPF Development
 
-The desktop layer lives under:
+Desktop source:
 
 ```text
-src/Desktop/
+src/Desktop/DesktopCompanion.Desktop/
 ```
 
-Primary responsibilities:
+Current Desktop responsibilities include:
 
-- desktop window lifecycle
-- Windows integration
-- user interaction
-- display and avatar hosting
-- communication with Agent Core
-- permission prompts
-- local OS-facing capabilities
+- application/window lifecycle;
+- WPF presentation;
+- local WebSocket transport;
+- Agent client application service;
+- independent receive loop for future proactive messages;
+- correlated request/response handling;
+- Memory management application service;
+- Memory list / detail / edit / delete / history presentation.
 
-The WPF layer must not contain Agent reasoning, memory logic, LLM provider logic, or other Python-core responsibilities.
-
-### Build and Run
-
-Open the Visual Studio solution under `src/Desktop/`.
-
-Use:
+The WPF layer must not own:
 
 ```text
-F5
+Agent reasoning
+Provider implementation
+Memory persistence rules
+Memory conflict/revision rules
+Permission decisions
+future Tool execution policy
 ```
 
-for debugging.
+### Build
+
+Current solution:
+
+```powershell
+dotnet build .\src\Desktop\DesktopCompanion.Desktop\DesktopCompanion.Desktop.slnx
+```
+
+### Run
+
+```powershell
+dotnet run --project `
+  .\src\Desktop\DesktopCompanion.Desktop\DesktopCompanion.Desktop\DesktopCompanion.Desktop.csproj
+```
 
 Before committing Desktop changes:
 
-- confirm the project builds
-- run relevant C# tests when they exist
-- verify the changed UI flow manually when necessary
+- confirm the solution builds;
+- run relevant C# tests when they exist;
+- verify changed UI behavior manually when necessary;
+- confirm client-side state is not treated as committed server truth before successful responses.
+
+C# automated tests do not yet exist.
 
 ---
 
 ## 7. Module Boundaries
 
-The project follows separation of responsibilities.
+The project follows explicit separation of responsibilities.
 
-Examples:
+Current chat path:
 
 ```text
 Desktop UI
     ↓
-Communication Layer
+AgentClientService
     ↓
-Agent Core
+IAgentConnection
+    ↓
+WebSocket
+    ↓
+RuntimeMessageRouter
+    ↓
+Agent
+    ↓
+Memory Retrieval + Prepared Context
+    ↓
+PromptContextComposer
+    ↓
+LLMProvider
 ```
 
-Not:
+Current Memory governance path:
 
 ```text
-MainWindow.xaml.cs
+WPF Memory UI
     ↓
-Direct DeepSeek API Call
+MemoryManagementViewModel
+    ↓
+IMemoryClientService
+    ↓
+correlated AgentClientService request
+    ↓
+WebSocket
+    ↓
+RuntimeMessageRouter
+    ↓
+MemoryProtocolHandler
+    ↓
+Memory Governance
+    ↓
+MemoryRepository
 ```
 
-Another example:
+Do not collapse these boundaries into direct calls from UI or transport code to concrete Provider/Repository implementations.
 
-```text
-Behavior Engine
-    ↓
-Semantic Avatar Action
-    ↓
-Avatar Adapter
-```
-
-Not:
-
-```text
-Emotion Module
-    ↓
-Direct Live2D Parameter Mutation
-```
-
-Core modules should communicate through explicit interfaces, messages, events, providers, or adapters.
+Core modules should communicate through explicit interfaces, protocols, repositories, messages, events, providers, or adapters.
 
 ---
 
 ## 8. Communication Contract
 
-C# Desktop and Python Agent Core communicate according to:
+Desktop and Python Agent Core communicate through the shared protocol boundary.
+
+Primary protocol documentation:
 
 ```text
 docs/COMMUNICATION_PROTOCOL.md
 ```
 
-Do not invent new message shapes directly inside implementation code.
+Implemented request families include chat and Phase 4 Memory governance.
+
+Memory request/response capabilities include:
+
+```text
+memory.list
+memory.inspect
+memory.edit
+memory.delete
+memory.history
+```
+
+Responses correlate to requests through:
+
+```text
+request Message.id
+-> response payload.request_id
+```
+
+Do not invent new message shapes only inside implementation code.
 
 If a new message type is required:
 
-1. update the protocol design
-2. define the message model
-3. implement both sender and receiver
-4. add tests
-5. update documentation
+1. define the boundary and ownership;
+2. update protocol design/documentation;
+3. define models/contracts;
+4. implement both sides where cross-process;
+5. add tests;
+6. verify stable error behavior.
+
+Request/response capabilities must not be hidden inside EventBus RPC.
 
 ---
 
-## 9. Security and Permission Rules
+## 9. Event / Command / Permission Rules
 
-Core rule:
+Persistent rules:
 
 ```text
+Event != Command
 Intent != Permission
+Memory Context != Permission
+Situation != Permission
 ```
 
-Agent initiative never grants additional authority.
+Runtime Events describe facts or notifications.
 
-Operations involving sensitive capabilities must pass through the permission system, including future access to:
+Commands, queries, governance operations, and return-value requests require explicit capability boundaries.
 
-- network services
-- files
-- screenshots
-- microphone
-- shell execution
-- UI Automation
-- Computer Use
-- external messaging
-- destructive changes
+Character intent, Memory content, Event existence, and future Behavior proposals do not grant sensitive authority.
 
-Personality, mood, relationship state, or autonomous behavior must never bypass permission checks.
+Operations involving sensitive capabilities must eventually pass through the Permission system, including future access to:
+
+- files;
+- screenshots;
+- microphone;
+- shell execution;
+- UI Automation;
+- Computer Use;
+- external messaging;
+- destructive actions.
 
 ---
 
-## 10. Local and Online Separation
+## 10. Character / Memory / State Separation
 
-The project must remain capable of graceful degradation.
+Persistent domain rules:
 
-Target runtime modes:
+```text
+Character
+-> who the companion is
+
+Memory
+-> factual user/runtime history and durable context
+
+Internal State
+-> how the companion is currently feeling / evolving
+
+Situation
+-> semantic interpretation of current facts/events
+```
+
+Do not merge these for implementation convenience.
+
+In particular:
+
+```text
+Character != Memory
+Character != Internal State
+Memory != Situation
+Relationship Memory != Relationship Internal State
+Real State != Fictional State
+```
+
+Fictional Character background and future fictional ephemeral state must not contaminate factual Memory, Tool reasoning, or Permission logic.
+
+---
+
+## 11. Memory Development Rules
+
+Phase 4 factual Memory domains:
+
+```text
+USER_PROFILE
+WORKING_CONTEXT
+EPISODIC
+RELATIONSHIP
+```
+
+Scope rules:
+
+```text
+USER_PROFILE      -> GLOBAL_USER
+WORKING_CONTEXT   -> GLOBAL_USER
+EPISODIC          -> GLOBAL_USER
+RELATIONSHIP      -> CHARACTER
+```
+
+Lifecycle:
+
+```text
+ACTIVE
+SUPERSEDED
+EXPIRED
+DELETED
+```
+
+Memory content is revisioned rather than destructively overwritten.
+
+Memory persistence boundary:
+
+```text
+Memory Domain
+    ↓
+MemoryRepository
+    ↓
+SQLiteMemoryRepository
+    ↓
+SQLAlchemy
+    ↓
+SQLite
+```
+
+Alembic owns schema evolution.
+
+Runtime startup upgrades the Memory database to Alembic head before repository use.
+
+The default database location comes from the operating-system user application-data directory through `platformdirs`.
+
+Explicit override:
+
+```text
+DCA_MEMORY_DATABASE_PATH
+```
+
+Do not move default runtime data back into the Git repository/source tree.
+
+Automatic Memory candidate extraction does not have unrestricted direct persistence authority.
+
+Retrieval remains provider-independent.
+
+Automatic learning may reuse the Provider boundary for candidate extraction, but Memory does not own Provider construction.
+
+---
+
+## 12. Memory Failure Semantics
+
+Memory has independently tracked capabilities:
+
+```text
+RETRIEVAL
+AUTOMATIC_LEARNING
+GOVERNANCE
+```
+
+Required behavior:
+
+```text
+Retrieval failure
+-> fail-open for ordinary chat
+
+Automatic-learning failure
+-> fail-open for an already-valid chat response
+
+Governance persistence failure
+-> fail-closed for the requested operation
+-> do not report durable success
+```
+
+A missing/unavailable Memory capability must not silently masquerade as a successful persistent write.
+
+Health tracking does not itself own retry or recovery policy.
+
+---
+
+## 13. Local and Online Separation
+
+Target runtime modes remain:
 
 ```text
 Offline
-Local AI
+Local
 Hybrid
 Cloud
 ```
 
-Cloud services are enhancements, not the foundation required for the companion to exist.
+Current implementation uses cloud DeepSeek for the default LLM path.
 
-When an external provider is unavailable:
+Current behavior includes provider-safe failure handling, but local-model/cloud fallback routing is not yet implemented.
 
-- detect the failure
-- expose service status
-- notify the user appropriately
-- fall back when configured
-- retain local companion behavior where possible
+Do not claim local fallback exists merely because `runtime_mode` supports broader future modes.
+
+The architecture should continue to preserve future local-provider adapters without coupling Agent Core to one vendor.
 
 ---
 
-## 11. Configuration and Secrets
+## 14. Configuration and Secrets
 
 Never commit secrets.
 
-Examples that must not be committed:
+Examples:
 
 ```text
 .env
@@ -407,165 +639,214 @@ Use:
 .env.example
 ```
 
-for documented environment-variable names without real values.
+for documented variable names without real values.
 
-Provider configuration should remain replaceable and must not be hard-coded into business logic.
-
-Current EventBus operational configuration:
+Current important runtime settings include:
 
 ```text
-DCA_EVENT_BUS_QUEUE_CAPACITY=256
+DCA_ENVIRONMENT
+DCA_RUNTIME_MODE
+DCA_WEBSOCKET_HOST
+DCA_WEBSOCKET_PORT
+DCA_EVENT_BUS_QUEUE_CAPACITY
+
+DCA_CHARACTER_DEFINITIONS_DIR
+DCA_ACTIVE_CHARACTER_ID
+
+DCA_WORKING_CONTEXT_RETENTION_DAYS
+DCA_MEMORY_DATABASE_PATH
+DCA_AUTOMATIC_LEARNING_ENABLED
+
+DCA_MODEL_PROVIDER
+DCA_DEEPSEEK_API_KEY
+DCA_DEEPSEEK_MODEL
+DCA_DEEPSEEK_TIMEOUT_SECONDS
+DCA_DEEPSEEK_THINKING_ENABLED
+
+DCA_LOG_LEVEL
 ```
 
-The queue capacity must remain positive and configurable through `Settings`; the default value is operational configuration, not an architecture guarantee.
+Important current defaults:
+
+```text
+EventBus queue capacity = 256
+Working Context retention = 7 days
+Automatic Memory Learning = enabled
+Memory DB = platform-specific user application-data directory
+Provider retries = 0
+Provider streaming = disabled
+```
+
+Operational defaults remain configurable unless an ADR explicitly makes them semantic guarantees.
 
 ---
 
-## 12. Git Workflow
+## 15. Git Workflow
 
 ### Check Current State
 
 ```powershell
-git status
+git status --short
 ```
 
-Git commands should normally be run from the repository root.
+Run Git commands from the repository root.
 
-### Stage Changes
+### Stage Focused Files
+
+Prefer explicit staging:
 
 ```powershell
-git add .
+git add path/to/file1 path/to/file2
 ```
 
-For focused changes, prefer staging specific files when practical.
+Avoid `git add .` when a focused file list is known.
 
 ### Review Before Commit
 
-Before committing:
-
-1. check `git status`
-2. run targeted tests
-3. run relevant quality checks
-4. confirm no secrets or generated files are staged
-5. update affected documentation
-
-### Commit
-
-Example:
+Required focused review flow:
 
 ```powershell
-git commit -m "Implement agent message model"
+git diff --check
+git status --short
+git --no-pager diff
+
+git add <explicit files>
+
+git --no-pager diff --cached --check
+git diff --cached --name-only
+git --no-pager diff --cached
 ```
 
-Commit messages should describe the completed change, not the activity used to make it.
+Before committing, confirm:
 
-Prefer:
-
-```text
-Implement WebSocket message handling
-```
-
-over:
-
-```text
-Worked on WebSocket stuff
-```
+- only intended files are staged;
+- tests/quality gates appropriate to the change passed;
+- no secrets/generated runtime data are staged;
+- documentation matches the implemented contract;
+- commit scope is coherent.
 
 ---
 
-## 13. Commit Scope
+## 16. Commit Scope
 
 Commits should be small enough to understand and revert.
 
 Good examples:
 
 ```text
-Define communication protocol
-Implement agent core foundation
-Add agent core unit tests
-Configure Python project structure
+feat(memory): add memory health model
+feat(protocol): add runtime message routing boundary
+fix(memory): bootstrap runtime database schema
+fix(memory): use platform app data for default database
+docs(memory): complete phase 4 runtime acceptance
 ```
 
 Avoid mixing unrelated changes such as:
 
 ```text
-Add memory system + redesign UI + update dependencies + fix unrelated bug
+Memory persistence
++ unrelated WPF redesign
++ Provider refactor
++ formatting sweep
 ```
 
 in one commit.
 
+Commit messages should describe the completed result.
+
 ---
 
-## 14. Documentation Rules
+## 17. Documentation Rules
 
-Project-level decisions belong in root documentation:
+Project-level current-state documents:
 
-- `PROJECT.md`
-- `ARCHITECTURE.md`
-- `DESIGN.md`
-- `ROADMAP.md`
-- `TECH_STACK.md`
-- `MVP_DESIGN.md`
-- `THIRD_PARTY.md`
+```text
+PROJECT_STATE.md
+ARCHITECTURE.md
+ROADMAP.md
+```
 
-Detailed subsystem documentation belongs in:
+Detailed subsystem/task documentation belongs under:
 
 ```text
 docs/
 ```
 
-Examples:
+Architecture decisions belong under:
 
-- communication protocol
-- memory design
-- permission model
-- event system
-- plugin API
+```text
+docs/adr/
+```
 
-When implementation changes a documented contract, update the documentation in the same development stage.
+Important source priority during recovery/review:
+
+```text
+current repository code
+confirmed Git history
+accepted ADRs
+current project-state documentation
+current phase/task documents
+historical checkpoints
+chat history
+```
+
+When implementation changes a documented contract, update the relevant documentation in the same development stage.
+
+Historical task plans/checkpoints may intentionally describe an earlier state. Do not rewrite historical records merely to make them look current.
 
 ---
 
-## 15. Third-Party Code and References
+## 18. Third-Party Code and References
 
 Before copying or adapting external code:
 
-1. identify the source repository
-2. check its license
-3. record the source in `THIRD_PARTY.md`
-4. distinguish between:
-   - architectural inspiration
-   - adapted implementation
-   - copied component
-   - external runtime integration
+1. identify the source repository;
+2. check its license;
+3. record the source in `THIRD_PARTY.md` when required;
+4. distinguish between architectural inspiration, adapted implementation, copied component, and external runtime integration.
 
-Do not copy source code from a project merely because it is publicly visible.
+Do not copy source code merely because it is publicly visible.
+
+Current Phase 4 dependency additions such as SQLAlchemy, aiosqlite, Alembic, and platformdirs are normal package dependencies, not copied source code.
 
 ---
 
-## 16. AI-Assisted Development
+## 19. AI-Assisted Development
 
 AI tools are development assistants, not project owners.
 
 When using Codex, Claude, GPT, or similar tools:
 
-- provide project background documents
-- state the exact modification scope
-- identify architectural constraints
-- require relevant targeted tests
-- require local Git commits when appropriate
-- do not ask them to redesign unrelated modules
-- do not ask them to run the complete test suite by default
+- provide relevant project state and architectural context;
+- state the exact modification scope;
+- identify boundary rules;
+- require relevant targeted tests;
+- inspect generated diffs;
+- stage explicit files;
+- do not allow unrelated redesign;
+- do not treat AI output as authoritative over repository reality.
 
-The project owner performs final integration review and full acceptance testing.
+The project owner performs final integration review and full acceptance.
+
+For this project, development discussion should distinguish:
+
+```text
+Implementation defect
+Contract mismatch
+Test defect
+Environment/configuration issue
+External Provider issue
+```
+
+Do not weaken an acceptance criterion merely to obtain a green result.
 
 ---
 
-## 17. Error Handling and Logging
+## 20. Error Handling and Logging
 
-Avoid relying on raw `print()` statements for long-term application behavior.
+Long-term application behavior must use structured logging rather than raw `print()` diagnostics.
 
-Future application modules should use structured logging with appropriate levels:
+Logging levels:
 
 ```text
 DEBUG
@@ -575,139 +856,218 @@ ERROR
 CRITICAL
 ```
 
-Errors should preserve enough context for diagnosis without leaking secrets or sensitive user data.
+Errors should preserve enough metadata for diagnosis without leaking sensitive user data.
 
-External-service failures must be distinguishable from internal application failures.
+Do not log by default:
+
+```text
+API keys
+Authorization headers
+complete user prompts
+complete model responses
+raw Provider response bodies
+reasoning content
+full sensitive Memory payloads
+```
+
+External Provider failures must remain distinguishable from internal runtime failures.
+
+Memory infrastructure errors must not be exposed to Desktop as raw SQLite/SQLAlchemy/filesystem diagnostics.
 
 ---
 
-## 18. Maintainability Principles
+## 21. Maintainability Principles
 
 The project prioritizes:
 
-- explicit module boundaries
-- replaceable providers
-- testable business logic
-- documented contracts
-- local-first operation
-- permission-first actions
-- backward-compatible evolution where practical
-- clear migration paths for persistent data
-- minimal hidden global state
+- explicit module boundaries;
+- replaceable Providers/adapters;
+- repository boundaries for persistence;
+- testable business logic;
+- documented protocol/architecture contracts;
+- local-first direction;
+- permission-first sensitive actions;
+- backward-compatible evolution where practical;
+- explicit migrations for persistent data;
+- minimal hidden global state;
+- explicit runtime lifecycle ownership.
 
-Do not simplify architecture merely to reduce short-term implementation difficulty when doing so would create long-term coupling.
-
----
-
-## 19. Definition of Done
-
-A development task is complete when all relevant items are satisfied:
-
-- implementation is finished
-- relevant tests pass
-- code-quality checks pass or known exceptions are documented
-- architectural boundaries remain valid
-- permissions remain correct
-- documentation is updated when necessary
-- no secrets or generated artifacts are committed
-- Git commit accurately represents the change
+Do not simplify architecture only to reduce short-term implementation difficulty when that would introduce hidden coupling or confused ownership.
 
 ---
 
-## 20. Current Development Baseline
+## 22. Definition of Done
 
-Phase 2 baseline (2026-09-12):
+A normal development task is complete when all relevant items are satisfied:
 
-- Windows 11 primary environment
-- C# WPF desktop layer
-- .NET 8 Windows project target
-- Python 3.11 Agent Core
-- `pyproject.toml` as the canonical Python project/build/dependency configuration
-- editable install through `pip install -e ".[dev]"`
-- pytest discovery under `src/agent_core/tests`
-- Ruff and mypy integrated into normal development checks
-- `pydantic-settings` runtime configuration with `.env` support
-- `SecretStr` used for Provider secrets
-- console + rotating-file Python logging
-- local WebSocket implemented for Desktop <-> Agent Core communication
-- JSON message envelope implemented in both Python and C#
-- protocol error isolation implemented for malformed input
-- C# `IAgentConnection` transport abstraction implemented
-- C# independent receive loop retained for future proactive messages
-- ConnectionProbe available for transport diagnostics
-- WPF ViewModel + Application Service layering implemented
-- provider-neutral asynchronous `LLMProvider` contract implemented
-- real DeepSeek Provider adapter implemented through `openai.AsyncOpenAI`
-- non-streaming Provider path with explicit timeout / zero automatic retry baseline
-- safe Provider Error -> Desktop protocol mapping implemented
-- immutable `RuntimeEvent` foundation implemented
-- narrow asynchronous `EventPublisher` capability implemented
-- bounded asynchronous in-process EventBus implemented
-- exact-type routing implemented
-- fail-fast EventBus queue-overload admission implemented
-- explicit EventBus lifecycle / graceful drain implemented
-- concurrent sibling Event handlers + ordinary failure isolation implemented
-- safe Event lifecycle observability implemented
-- Event payload logging regression protection implemented
-- EventBus lifetime owned by the Python composition root
-- `DCA_EVENT_BUS_QUEUE_CAPACITY` configuration added; default 256, positive only
-- Provider lifetime remains protected across EventBus/runtime failures
-- real WPF <-> Python <-> DeepSeek round trip re-verified after EventBus integration
-- Phase 2 final Python acceptance: 104 pytest tests passed, Ruff passed, mypy passed on 38 source files
-- Phase 2 changed no C# source; C# build was therefore not required by the accepted final gate
-- SQLite remains planned as the first persistent database
-- local-model support remains planned
-- Git remains the source of development history
+- implementation is finished;
+- targeted tests pass;
+- relevant Ruff/mypy checks pass;
+- working diff is reviewed;
+- staged diff is reviewed;
+- architectural boundaries remain valid;
+- permissions/failure semantics remain correct;
+- documentation is updated when necessary;
+- no secrets or generated runtime artifacts are committed;
+- commit accurately represents the change;
+- push/remote state is confirmed when required.
 
-Final phase-quality trio:
+A phase-final acceptance additionally requires:
 
-```powershell
-python -m pytest -q
-python -m ruff check .
-python -m mypy src
+```text
+full Python regression
+full Ruff
+full mypy
+Desktop build when relevant
+real-runtime acceptance where needed
+sensitive-log review where needed
+current-state documentation synchronization
+phase checkpoint
+clean repository state
 ```
 
-For ordinary implementation tasks, continue using directly relevant targeted pytest / Ruff / mypy first. The full trio is a phase-final project-owner gate.
+---
 
-Important distinction:
+## 23. Current Development Baseline
 
-- Phase 0 cross-language runtime foundation is complete.
-- Phase 1 original AI MVP / real LLM path is complete.
-- Phase 2 Event System is complete.
-- Phase 3 Character System is the next roadmap phase.
+Phase 4 accepted runtime baseline:
+
+```text
+Python 3.11
+C# WPF / .NET 8 Windows
+
+WebSocket Desktop <-> Python transport
+Provider-neutral async LLMProvider
+DeepSeek AsyncOpenAI adapter
+
+bounded in-process EventBus
+structured Character System
+Clock / TemporalContext
+PromptContextComposer
+
+factual Memory domain
+SQLite / SQLAlchemy persistence
+Alembic migrations
+runtime schema bootstrap
+PreparedMemoryContext retrieval
+Automatic Memory Learning
+Memory revision/conflict/deletion semantics
+Memory health / failure isolation
+RuntimeMessageRouter
+WebSocket Memory governance
+WPF Memory management
+```
+
+Phase progression:
+
+```text
+Phase 0
+cross-language runtime foundation
+COMPLETE
+
+Phase 1
+real LLM / Provider path
+COMPLETE
+
+Phase 2
+Event System
+COMPLETE
+
+Phase 3
+Character / Temporal / Composition
+COMPLETE
+
+Phase 4
+Memory System
+COMPLETE / final documentation in progress
+
+Phase 5
+Situation Engine
+NEXT
+```
+
+Phase 4 final Task 11 acceptance:
+
+```text
+355 pytest tests passed
+Ruff passed
+mypy passed on 111 source files
+Desktop build succeeded
+git diff --check clean
+```
+
+Task 12 storage-location correction retained:
+
+```text
+355 pytest tests passed
+Ruff passed
+mypy passed on 111 source files
+```
+
+Real Phase 4 runtime acceptance proved:
+
+```text
+automatic explicit learning
+non-explicit input not persisted
+durability across complete Python Core restart
+retrieval into Provider context
+revision/correction semantics
+delete semantics
+Character-scoped Relationship isolation
+automatic-learning-disabled behavior
+failure isolation
+WebSocket governance
+WPF governance
+Provider-safe errors
+runtime log safety
+```
 
 Current Provider constraints:
 
-- non-streaming Provider path
-- zero automatic Provider retries
-- no local-model/cloud fallback routing yet
-- Provider roles limited to `system`, `user`, and `assistant`
+```text
+non-streaming
+zero automatic retries
+no local-model/cloud fallback router
+roles remain system/user/assistant
+```
 
 Current Event System constraints:
 
-- internal Python runtime only
-- exact-type routing only
-- no Event persistence / replay
-- no wildcard subscription
-- no subscriber priority
-- no dynamic unsubscribe baseline
-- no automatic Event retry
-- no multiple dispatcher workers
-- no restart/supervision policy
-- no Desktop Event Bridge
+```text
+internal Python runtime only
+exact-type routing
+no persistence/replay
+no wildcard subscription
+no subscriber priority
+no dynamic unsubscribe
+no automatic Event retry
+single dispatcher
+no restart/supervision policy
+no Desktop Event Bridge
+```
 
-Known shutdown debt:
+Current known Runtime/Desktop debt includes:
 
-- abrupt WPF disconnect may produce a WebSocket missing-close-frame error in Python logs; treat this as Desktop/WebSocket shutdown-hardening work, not an EventBus failure.
+```text
+hard-coded Desktop WebSocket endpoint
+no C# automated tests
+limited reconnect/retry recovery
+abrupt WPF shutdown may miss close handshake
+plain-text Markdown/LaTeX rendering
+standalone packaging must include Alembic migration resources
+```
 
-Context-recovery documents:
+Current recovery entry points during Task 12:
 
-- `PROJECT_STATE.md`
-- `docs/PHASE_2_CHECKPOINT.md`
+```text
+PROJECT_STATE.md
+ARCHITECTURE.md
+ROADMAP.md
+docs/PHASE_4_TASK11_RUNTIME_ACCEPTANCE_PLAN.md
+docs/adr/README.md
+docs/DEVELOPMENT_UNDERSTANDING.md
+```
 
-Historical checkpoints:
-
-- `docs/PHASE_0_CHECKPOINT.md`
-- `docs/PHASE_1_CHECKPOINT.md`
+Task 12 will create the final Phase 4 checkpoint. After that checkpoint exists, it should become the primary phase-specific recovery document for Phase 5 context restoration.
 
 This document should continue evolving with each major runtime phase.

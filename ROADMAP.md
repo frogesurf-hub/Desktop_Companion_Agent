@@ -1,8 +1,8 @@
 # Desktop Companion Agent Roadmap
 
-> Re-baselined after the Phase 3 checkpoint on 2026-09-13.
+> Re-baselined during Phase 4 Task 12 final documentation after the accepted Phase 4 Memory System baseline.
 >
-> Phase 0 established the Desktop/WebSocket cross-language foundation. Phase 1 completed the original AI MVP with a provider-neutral DeepSeek path. Phase 2 established the runtime Event System. Phase 3 completed the Character System, temporal runtime context, and prompt/context composition. Phase 4 - Memory System is now the active next phase.
+> Phase 0 established the Desktop/WebSocket cross-language foundation. Phase 1 completed the original AI MVP with a provider-neutral DeepSeek path. Phase 2 established the runtime Event System. Phase 3 completed the Character System, temporal runtime context, and prompt/context composition. Phase 4 completed the factual Memory System. Phase 5 - Situation Engine is the active next phase.
 
 ## Phase 0 - Engineering Foundation and Cross-Language Vertical Slice
 
@@ -220,29 +220,169 @@ See:
 
 ## Phase 4 - Memory System
 
-Status: **Next**
+Status: **Complete**
 
-Goal:
+Goal achieved:
 
-Introduce separated memory domains without allowing temporary or fictional state to contaminate facts.
+Introduce durable, factual, governable Memory without allowing temporary, fictional, low-confidence, or permission-bearing state to contaminate factual user context.
 
-Planned memory domains:
+Implemented semantic Memory domains:
 
-- User Profile
-- Working Context
-- Episodic Memory
-- Long-term Memory
-- Relationship Memory
-- Today Memory
-- Fictional Ephemeral State
+```text
+USER_PROFILE
+WORKING_CONTEXT
+EPISODIC
+RELATIONSHIP
+```
+
+Implemented scopes:
+
+```text
+GLOBAL_USER
+CHARACTER
+```
+
+Implemented lifecycle:
+
+```text
+ACTIVE
+SUPERSEDED
+EXPIRED
+DELETED
+```
+
+Completed:
+
+- [x] factual Memory domain models
+- [x] domain / scope compatibility rules
+- [x] revision and lifecycle semantics
+- [x] qualitative source authority
+- [x] logical `MemoryIdentityKey`
+- [x] SQLite durable source of truth
+- [x] SQLAlchemy persistence adapter
+- [x] Alembic schema migrations
+- [x] runtime schema bootstrap before repository use
+- [x] platform-appropriate default application-data database path
+- [x] explicit `DCA_MEMORY_DATABASE_PATH` override
+- [x] Working Context retention policy
+- [x] conflict / replacement semantics
+- [x] deletion/tombstone semantics
+- [x] bounded `PreparedMemoryContext`
+- [x] Memory retrieval into real Agent / Composer / Provider path
+- [x] active-Character Relationship Memory isolation
+- [x] controlled automatic-learning contracts
+- [x] automatic-learning eligibility policy
+- [x] existing-Memory resolution
+- [x] automatic-learning persistence primitives
+- [x] LLM candidate extraction behind policy/commit boundaries
+- [x] automatic learning enabled by default
+- [x] automatic learning disable mode without disabling retrieval/governance
+- [x] retrieval failure isolation
+- [x] automatic-learning failure isolation
+- [x] governance fail-closed behavior
+- [x] Memory health tracking
+- [x] explicit request/response runtime routing
+- [x] WebSocket Memory governance protocol
+- [x] stable Memory protocol errors and request correlation
+- [x] Desktop Memory protocol contracts
+- [x] typed Desktop Memory application service
+- [x] WPF Memory management ViewModel
+- [x] WPF Memory list / inspect / edit / history / delete UI
+- [x] integrated SQLite -> Retrieval -> Agent -> Provider-request acceptance test
+- [x] real automatic-learning runtime acceptance
+- [x] real Python Core restart persistence acceptance
+- [x] corrected revision retrieval acceptance
+- [x] delete acceptance
+- [x] real automatic-learning-disabled acceptance
+- [x] sensitive-log review
+- [x] final full Python and Desktop quality gates
+
+Phase 4 semantic corrections to the earlier roadmap:
+
+```text
+Long-term Memory
+-> lifecycle / retention semantics, not a separate domain
+
+Today Memory
+-> time filtering / lifecycle semantics, not a separate domain
+
+Fictional Ephemeral State
+-> remains isolated from factual Memory
+```
+
+Final Task 11 acceptance:
+
+```text
+355 pytest tests passed
+Ruff passed
+mypy passed on 111 source files
+Desktop build succeeded
+git diff --check clean
+```
+
+Task 12 storage-location correction retained the same full Python regression:
+
+```text
+355 pytest tests passed
+Ruff passed
+mypy passed on 111 source files
+```
+
+Real runtime acceptance included:
+
+```text
+automatic explicit learning
+non-explicit input not persisted
+durability across complete Core restart
+retrieval into Provider context
+correction / revision use
+delete behavior
+Relationship scope isolation
+automatic-learning disabled mode
+failure isolation
+WebSocket governance
+WPF governance
+Provider-safe error behavior
+log safety
+```
+
+Not included by design:
+
+- Internal State / mood / affection / trust scoring
+- Situation / Attention / Behavior orchestration
+- Permission / Tool authority
+- vector database / embedding retrieval
+- RAG framework
+- cloud Memory synchronization
+- multi-user accounts
+- Memory backup/restore UI
+- encryption-at-rest feature work
+
+See:
+
+- `docs/PHASE_4_MEMORY_SYSTEM_DESIGN.md`
+- `docs/PHASE_4_TASK11_RUNTIME_ACCEPTANCE_PLAN.md`
+- ADR 0016 / 0017 / 0018 / 0019 / 0020 / 0021
 
 ---
 
 ## Phase 5 - Situation Engine
 
+Status: **Next**
+
 Goal:
 
-Convert low-level events into semantic situations.
+Convert low-level runtime facts and events into semantic situations without turning Situation into Attention, Behavior execution, Permission, or Memory persistence.
+
+Target position:
+
+```text
+Perception / Runtime Facts / Events
+-> Situation Engine
+-> semantic Situation
+-> future Attention Engine
+-> future Behavior Engine
+```
 
 Example:
 
@@ -252,6 +392,19 @@ Unity active
 + compile failure
 + repeated retry
 -> user is debugging a Unity problem
+```
+
+Phase 5 should define explicit Situation inputs, outputs, lifecycle, and ownership before implementation.
+
+Boundary rules carried forward:
+
+```text
+Event != Command
+Memory != Situation
+Situation != Behavior
+Situation != Permission
+Intent != Permission
+Real State != Fictional State
 ```
 
 ---
@@ -407,7 +560,7 @@ Planned:
 - habit learning
 - lightweight fictional daily-life flavor
 
-Fictional state remains isolated from factual memory and tool reasoning.
+Fictional state remains isolated from factual Memory and Tool reasoning.
 
 ---
 
@@ -417,10 +570,10 @@ Prefer:
 
 1. stable architecture
 2. explicit Event / command / permission boundaries
-3. memory correctness
-4. situation / attention / proactivity
-5. perception
-6. behavior
+3. factual Memory correctness
+4. Situation / Attention / proactivity
+5. Perception
+6. Behavior / Internal State
 7. embodiment and polish
 
 Avoid prematurely prioritizing:

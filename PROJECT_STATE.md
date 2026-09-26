@@ -1,8 +1,8 @@
 # Desktop Companion Agent - Project State
 
-> Context checkpoint: Phase 3 completed on 2026-09-13.
+> Context checkpoint: Phase 4 Memory System runtime acceptance completed; Task 12 final documentation is in progress.
 >
-> This file is the primary context-recovery document for future development sessions. If chat context is lost, read this file first, then `docs/PHASE_3_CHECKPOINT.md`, `ARCHITECTURE.md`, `ROADMAP.md`, and the relevant subsystem design / ADR documents.
+> This file is the primary current-state recovery document. Repository code and the latest confirmed Git commit remain the source of truth when historical documents describe an earlier phase.
 
 ## 1. Current Status
 
@@ -12,34 +12,33 @@ Current phase status:
 - Phase 1 - LLM Provider / Original AI MVP: **Complete**
 - Phase 2 - Event System: **Complete**
 - Phase 3 - Character System: **Complete**
-- Next roadmap phase: **Phase 4 - Memory System**
+- Phase 4 - Memory System: **Complete / final documentation in progress**
+- Next roadmap phase: **Phase 5 - Situation Engine**
 
-Current implementation baseline before the Phase 3 final-documentation commit:
+Latest confirmed implementation checkpoint before Task 12 documentation synchronization:
 
 ```text
-a172a43 Update Agent integration test fixtures
+3d7435c fix(memory): use platform app data for default database
 ```
 
-Phase 3 added a structured Character System, runtime temporal context, and provider-neutral prompt/context composition without replacing the verified Provider/WebSocket/EventBus runtime.
+Phase 4 added a factual, durable, governable Memory subsystem while preserving the previously accepted Provider, EventBus, Character, Temporal Context, and Desktop boundaries.
 
-The verified real vertical slice is now:
+The current conversational vertical slice is:
 
 ```text
 WPF UI
   -> MainWindowViewModel
   -> AgentClientService
-  -> IAgentConnection
   -> WebSocketAgentConnection
-  -> JSON / AgentMessage
   -> WebSocket
   -> Python WebSocketServer
-  -> Message
-  -> Agent.process_message()
-  -> Clock.now()
-  -> TemporalContext
+  -> RuntimeMessageRouter
+  -> Agent
+  -> Clock / TemporalContext
   -> active CharacterDefinition
+  -> Memory Retrieval
+  -> PreparedMemoryContext
   -> PromptContextComposer
-  -> LLMRequest
   -> LLMProvider
   -> DeepSeekProvider
   -> DeepSeek API
@@ -48,40 +47,76 @@ WPF UI
   -> WPF UI
 ```
 
-Alongside that request/response path, the Python runtime continues to own the in-process EventBus foundation introduced in Phase 2.
+Automatic learning runs after eligible chat turns through an independent Memory learning boundary.
 
-## 2. What Phase 3 Proved
+Memory governance uses a separate request/response path:
 
-Phase 3 proved that stable Character identity and runtime temporal truth can participate in the real LLM request path without collapsing Provider, Event, factual-state, or future Memory boundaries.
+```text
+WPF Memory UI
+  -> MemoryManagementViewModel
+  -> IMemoryClientService
+  -> correlated Agent client request
+  -> WebSocket
+  -> RuntimeMessageRouter
+  -> MemoryProtocolHandler
+  -> Memory Governance
+  -> MemoryRepository
+  -> SQLite
+```
 
-Verified properties:
+The Python runtime continues to own the in-process EventBus introduced in Phase 2. Memory governance requests are not implemented as EventBus RPC.
 
-- Character definition is explicit domain data rather than an ad-hoc prompt blob.
-- TOML is a human-editable external serialization format, not the Character domain model.
-- the default built-in Character is `Aria`.
-- runtime Character selection belongs to the composition root.
-- external Character definition directories and active Character IDs are configurable.
-- Character does not own Memory.
-- Character does not own Internal State.
-- Character intent does not grant permission or tool authority.
-- Character fiction does not override mathematics, science, runtime facts, user facts, or tool results.
-- `Clock` is the sole runtime source of current date/time truth.
-- `TemporalContext` is a derived per-request snapshot.
-- `PromptContextComposer` consumes prepared context and produces a provider-neutral `LLMRequest`.
-- Composer does not load Character, query Clock, query Memory, call Provider, publish Events, permission-check, or execute tools.
-- Agent receives Character / Composer / Clock through explicit dependency injection.
-- Provider error mapping remains unchanged.
-- unsupported Desktop messages are still rejected before Provider execution.
-- Character loading failure does not create Provider or EventBus resources.
-- the real WPF -> Python -> DeepSeek -> Python -> WPF path works with Character and Temporal Context active.
-- manual runtime acceptance confirmed Aria identity/style, mathematically correct `sqrt(2)` reasoning, correct runtime date/weekday, and factual-reality priority over Character fiction.
-- deliberate Provider authentication failure and sensitive-log review remained safe after Character integration.
+---
 
-Phase 3 deliberately did **not** implement Memory persistence, User Profile learning, Internal State, Scheduler, Perception, Situation, Attention, Behavior, Permission, Tools, Voice, Avatar, dynamic Character switching UI, Character hot reload, or a Desktop Event Bridge.
+## 2. What Phase 4 Proved
+
+Phase 4 proved that durable factual Memory can participate in the real desktop runtime without collapsing Character, Prompt Composition, Provider, Event, Permission, or fictional-state boundaries.
+
+Verified properties include:
+
+- factual Memory has explicit semantic domain, scope, lifecycle, provenance, logical identity, and revision history;
+- implemented domains are `USER_PROFILE`, `WORKING_CONTEXT`, `EPISODIC`, and `RELATIONSHIP`;
+- `USER_PROFILE`, `WORKING_CONTEXT`, and ordinary `EPISODIC` Memory are globally user-scoped;
+- `RELATIONSHIP` Memory is scoped to one Character;
+- lifecycle states are `ACTIVE`, `SUPERSEDED`, `EXPIRED`, and `DELETED`;
+- edits and corrections create revisions instead of destructively replacing history;
+- successful replacement atomically supersedes the previous active revision and activates the new revision;
+- deleted factual content does not participate in normal retrieval and is not re-exposed through normal governance history;
+- `MemoryIdentityKey` gives automatic learning a deterministic logical identity boundary;
+- SQLite is the durable local factual source of truth;
+- SQLAlchemy remains inside the persistence adapter boundary;
+- Alembic owns schema migrations;
+- runtime startup upgrades the Memory database to Alembic head before repository access;
+- the default Memory database path is resolved through the operating-system user application-data directory;
+- `DCA_MEMORY_DATABASE_PATH` remains an explicit override;
+- Working Context retention defaults to 7 days and is configurable from 1 through 30 days;
+- retrieval produces bounded `PreparedMemoryContext` rather than exposing persistence to `PromptContextComposer`;
+- automatic learning is enabled by default and can be disabled independently from retrieval and governance;
+- automatic extraction does not receive unrestricted persistence authority;
+- explicit/high-certainty facts pass through extraction, eligibility, resolution, conflict, and commit boundaries;
+- unsupported/non-explicit input does not automatically become durable factual Memory;
+- retrieval failure is fail-open for ordinary chat;
+- automatic-learning failure is fail-open for an otherwise valid chat response;
+- user governance is fail-closed and never reports a failed durable write as success;
+- Memory health is tracked independently from overall chat availability;
+- Memory governance is exposed through stable WebSocket request/response capabilities;
+- `RuntimeMessageRouter` routes `chat` to Agent and `memory.*` to Memory protocol handling;
+- EventBus remains a facts/notifications boundary and is not used as hidden RPC;
+- WPF can list, inspect, edit, delete, and inspect permitted Memory history;
+- a real Memory survives complete Python Core restart;
+- persisted Memory is retrieved and reaches the real Provider context path;
+- corrected Memory is used instead of superseded content;
+- deleted Memory is no longer available to the runtime;
+- disabling automatic learning does not disable chat, existing retrieval, or governance;
+- Phase 4 final runtime acceptance preserved earlier Character, Temporal, Provider, EventBus, and log-safety behavior.
+
+Phase 4 deliberately did **not** implement Internal State, Situation, Attention, Perception, Behavior, Permission, Tools, Voice, Avatar, cloud Memory sync, multi-user accounts, vector search, embedding retrieval, or local-LLM fallback routing.
+
+---
 
 ## 3. Current Implemented Architecture
 
-### 3.1 Python Agent Core
+### 3.1 Python Composition Root
 
 Entry point:
 
@@ -89,294 +124,369 @@ Entry point:
 src/agent_core/main.py
 ```
 
-Current composition:
+Current high-level composition:
 
 ```text
-main.py
-  -> get_settings()
-  -> setup_logging()
-  -> load / resolve active Character
-  -> create PromptContextComposer
-  -> create SystemClock
-  -> create DeepSeekProvider
-  -> establish Provider cleanup boundary
-  -> create EventBus(queue_capacity=Settings)
-  -> create Agent(provider, character, composer, clock)
-  -> create WebSocketServer(agent)
-  -> await EventBus.start()
-  -> await WebSocketServer.run()
-  -> finally await EventBus.close()
-  -> finally await Provider.aclose()
+Settings
+  -> Logging
+  -> active Character loading / resolution
+  -> PromptContextComposer
+  -> SystemClock
+  -> Memory schema upgrade
+  -> Memory engine / session factory / SQLiteMemoryRepository
+  -> MemoryHealthTracker
+  -> MemoryRetrievalService
+  -> ResilientMemoryRetriever
+  -> DeepSeekProvider
+  -> optional Automatic Memory Learning pipeline
+  -> EventBus
+  -> Agent
+  -> MemoryGovernanceService
+  -> HealthAwareMemoryGovernanceService
+  -> MemoryProtocolHandler
+  -> RuntimeMessageRouter
+  -> WebSocketServer
 ```
 
-Implemented modules now include:
+Lifecycle ownership remains explicit:
 
 ```text
-src/agent_core/
-├── characters/
-│   ├── definitions/
-│   │   └── aria.toml
-│   ├── errors.py
-│   ├── loader.py
-│   └── models.py
-├── communication/
-│   └── websocket_server.py
-├── composition/
-│   └── composer.py
-├── config/
-│   └── settings.py
-├── core/
-│   ├── agent.py
-│   └── message.py
-├── events/
-│   ├── __init__.py
-│   ├── base.py
-│   ├── bus.py
-│   ├── errors.py
-│   └── models.py
-├── observability/
-│   └── logging.py
-├── providers/
-│   ├── __init__.py
-│   ├── base.py
-│   ├── deepseek.py
-│   ├── errors.py
-│   └── models.py
-├── temporal/
-│   ├── clock.py
-│   └── models.py
-├── tests/
-└── main.py
+composition root
+  -> start EventBus
+  -> run WebSocket server
+  -> close EventBus
+  -> close Provider
 ```
 
-Implemented behavior includes:
+### 3.2 Memory Domain
 
-- typed runtime settings via `pydantic-settings`
-- `.env` / environment-variable support with `DCA_` prefix
-- secrets represented with `SecretStr`
-- `pyproject.toml` as the canonical Python dependency source
-- OpenAI Python SDK isolated inside the DeepSeek adapter boundary
-- console + rotating-file logging
-- local WebSocket server
-- JSON message parse / serialize
-- malformed-input isolation
-- async provider-neutral `LLMProvider` contract
-- DeepSeek OpenAI-compatible Chat Completions adapter
-- provider-neutral error hierarchy / safe Desktop error mapping
-- explicit Provider timeout / zero SDK retries / asyncio cancellation propagation
-- immutable Runtime Event foundation
-- asynchronous bounded in-process EventBus
-- exact-type Event routing
-- fail-fast overload admission
-- explicit EventBus lifecycle / graceful drain
-- subscriber concurrency + ordinary failure isolation
-- safe Event lifecycle observability
-- structured `CharacterDefinition` domain
-- human-editable TOML Character definitions
-- built-in default Character `Aria`
-- runtime active-Character selection through Settings
-- explicit `Clock` / `SystemClock` temporal authority
-- derived per-request `TemporalContext`
-- provider-neutral `PromptContextComposer`
-- runtime rules that preserve factual truth over Character fiction
-- explicit Agent injection of Character / Composer / Clock
-- composition-root ownership of Character selection, EventBus, and Provider lifetimes
-
-### 3.2 Current DeepSeek Baseline
-
-Configuration:
+Core concepts:
 
 ```text
-DCA_MODEL_PROVIDER=deepseek
-DCA_DEEPSEEK_API_KEY=<local secret>
-DCA_DEEPSEEK_MODEL=deepseek-flash
-DCA_DEEPSEEK_TIMEOUT_SECONDS=60
-DCA_DEEPSEEK_THINKING_ENABLED=false
+Memory
+MemoryRevision
+MemoryDomain
+MemoryScope
+MemoryScopeKind
+MemoryLifecycle
+MemorySource
+MemoryIdentityKey
 ```
 
-Provider implementation baseline:
+Semantic domains:
 
 ```text
-client: openai.AsyncOpenAI
-base URL: https://api.deepseek.com
-API style: OpenAI-compatible Chat Completions
-streaming: false
-thinking: explicitly disabled by default
-application timeout: 60 seconds by default
-SDK max_retries: 0
+USER_PROFILE
+WORKING_CONTEXT
+EPISODIC
+RELATIONSHIP
 ```
 
-`Agent` does not import `AsyncOpenAI`, DeepSeek HTTP status types, or vendor SDK exceptions.
-
-### 3.3 Provider Contract
-
-Agent-facing contract:
-
-```python
-async def generate(request: LLMRequest) -> LLMResponse
-```
-
-Provider-neutral models:
+Scopes:
 
 ```text
-LLMMessage
-LLMRequest
-LLMResponse
-LLMRole
+GLOBAL_USER
+CHARACTER
 ```
 
-Current supported roles:
+Domain/scope rules:
 
 ```text
-system
-user
-assistant
-```
-
-Provider error boundary:
-
-```text
-LLMProviderError
-├── ProviderConfigurationError
-├── ProviderAuthenticationError
-├── ProviderQuotaError
-├── ProviderRateLimitError
-├── ProviderTimeoutError
-├── ProviderConnectionError
-├── ProviderRequestError
-├── ProviderUnavailableError
-└── ProviderResponseError
-```
-
-Phase 1-3 runtime performs zero automatic Provider retries.
-
-### 3.4 Event Contract
-
-Base Runtime Event:
-
-```text
-RuntimeEvent
-├── source: str
-├── event_id: UUID
-├── occurred_at: timezone-aware UTC datetime
-├── correlation_id: UUID | None
-└── causation_id: UUID | None
-```
-
-Contract properties:
-
-- frozen dataclass
-- slot-based
-- keyword-only construction
-- default `event_id` generated with UUID
-- default occurrence time generated in UTC
-- aware timestamps normalized to UTC
-- naive timestamps rejected
-- blank `source` rejected
-- Event-specific payload fields are added by concrete Event subclasses
-
-Public capability boundary:
-
-```python
-class EventPublisher(Protocol):
-    async def publish(self, event: RuntimeEvent) -> None: ...
-```
-
-Subscriber boundary is an asynchronous callable typed to one Runtime Event type.
-
-### 3.5 EventBus Baseline
-
-Phase 2 EventBus semantics:
-
-```text
-scope: in-process Python runtime
-execution: async
-queue: bounded in-memory queue
-routing: exact concrete Event type
-subscription registration: static before running
-publish result: queue admission only
-queue-full behavior: fail fast with EventBusFullError
-ordering: queue admission order
-subscriber execution for one Event: concurrent
-cross-Event execution: next Event waits until current handlers settle
-ordinary handler failure: isolated
-persistence: none
-wildcards: none
-priority: none
-retry: none
-multiple dispatcher workers: none
-restart policy: none
+USER_PROFILE      -> GLOBAL_USER
+WORKING_CONTEXT   -> GLOBAL_USER
+EPISODIC          -> GLOBAL_USER
+RELATIONSHIP      -> CHARACTER
 ```
 
 Lifecycle:
 
 ```text
-NEW
-  -> RUNNING
-  -> CLOSING
-  -> CLOSED
+ACTIVE
+SUPERSEDED
+EXPIRED
+DELETED
 ```
 
-Important lifecycle properties:
-
-- publication is accepted only while the bus is RUNNING
-- `close()` drains already accepted Events
-- repeated close is safe under the accepted Phase 2 semantics
-- close from NEW is supported
-- terminal cleanup leaves no intended live EventBus tasks
-- cancellation remains distinct from ordinary handler failure
-
-### 3.6 Event Observability
-
-EventBus logs diagnostic metadata such as:
-
-- lifecycle transition
-- Event type
-- Event ID
-- sanitized source
-- handler identity where useful
-- handler / dispatch duration where useful
-- exception type for failure diagnostics
-
-Default Event logs must not include:
-
-- `repr(event)`
-- full Event payloads
-- subscriber exception messages
-- dispatcher exception messages
-- arbitrary sensitive payload content
-
-Tests explicitly verify known sensitive markers do not appear in captured Event System logs.
-
-### 3.7 C# WPF Desktop
-
-Current Desktop layering remains:
+Source authority, highest to lowest:
 
 ```text
-App.xaml.cs                 Composition Root
-      |
-      v
-MainWindow                  Presentation view
-      |
-      v
-MainWindowViewModel         Presentation state / interaction
-      |
-      v
-AgentClientService          Application-level Agent client behavior
-      |
-      v
-IAgentConnection            Transport abstraction
-      |
-      v
-WebSocketAgentConnection    WebSocket + JSON transport
-      |
-      v
-AgentMessage                Protocol model
+USER_EDIT
+USER_EXPLICIT
+AUTOMATIC_EXPLICIT_FACT
+SYSTEM_OBSERVED
 ```
 
-The independent Desktop receive loop remains an intentional long-term capability for future proactive messages.
+Memory context never grants Tool or Permission authority.
 
-Phases 2 and 3 did not modify C# source.
+### 3.3 Memory Persistence
+
+Persistence architecture:
+
+```text
+Memory Domain
+  -> MemoryRepository contract
+  -> SQLiteMemoryRepository
+  -> SQLAlchemy
+  -> SQLite
+```
+
+Schema evolution:
+
+```text
+Alembic
+  0001_memory
+  -> 0002_identity_key
+  -> 0003_identity_unique
+```
+
+Runtime schema bootstrap occurs before repository use.
+
+Default database location:
+
+```text
+platform-specific user application-data directory
+  -> Desktop Companion Agent
+  -> memory.db
+```
+
+On Windows this resolves under the current user's Local App Data directory.
+
+Explicit override:
+
+```text
+DCA_MEMORY_DATABASE_PATH
+```
+
+The database is not intended to default to the Git repository or source tree.
+
+### 3.4 Memory Retrieval
+
+Runtime path:
+
+```text
+user request
+  -> MemoryRetrievalService
+  -> MemoryRetrievalPolicy
+  -> eligible ACTIVE Memory
+  -> PreparedMemoryContext
+  -> PromptContextComposer
+  -> Provider request
+```
+
+Retrieval is query-only and does not mutate Memory.
+
+Prepared context preserves semantic separation such as:
+
+```text
+user_profile
+working_context
+relevant_episodes
+relationship_context
+```
+
+Relationship retrieval is restricted to the active Character.
+
+Recoverable retrieval failure:
+
+```text
+Memory read failure
+  -> Memory health degraded
+  -> empty PreparedMemoryContext
+  -> ordinary chat continues
+```
+
+### 3.5 Automatic Memory Learning
+
+Runtime learning path:
+
+```text
+completed chat turn
+  -> LLMMemoryCandidateExtractor
+  -> MemoryLearningPolicy
+  -> ExistingMemoryResolver
+  -> MemoryConflictPolicy
+  -> MemoryLearningService
+  -> MemoryRepository
+  -> SQLite
+```
+
+`ResilientMemoryTurnLearner` isolates recoverable learning failure from the already-valid chat response.
+
+Configuration:
+
+```text
+DCA_AUTOMATIC_LEARNING_ENABLED=true
+```
+
+When disabled:
+
+```text
+new automatic learning stops
+existing retrieval continues
+manual governance continues
+ordinary chat continues
+```
+
+Logical identity uses `MemoryIdentityKey` where a stable factual slot exists.
+
+### 3.6 Governance and Health
+
+Governance capabilities:
+
+```text
+list
+inspect
+edit
+delete
+history
+```
+
+Governance owns revision and deletion semantics. Desktop does not implement those business rules independently.
+
+Failure behavior:
+
+```text
+Retrieval failure
+-> fail-open for chat
+
+Automatic-learning failure
+-> fail-open for chat
+
+Governance persistence failure
+-> fail-closed for requested operation
+```
+
+Runtime health is represented separately for Memory capability state.
+
+### 3.7 Runtime Request Routing
+
+Current request/response routing:
+
+```text
+WebSocketServer
+  -> RuntimeMessageRouter
+       |- chat
+       |   -> Agent
+       |
+       `- memory.*
+           -> MemoryProtocolHandler
+```
+
+The router owns request-type routing only.
+
+Memory protocol supports:
+
+```text
+memory.list
+memory.inspect
+memory.edit
+memory.delete
+memory.history
+```
+
+Responses use request correlation through:
+
+```text
+request Message.id
+-> response payload.request_id
+```
+
+Stable Memory protocol error codes include:
+
+```text
+MEMORY_INVALID_REQUEST
+MEMORY_NOT_FOUND
+MEMORY_DELETED
+MEMORY_INVALID_STATE
+MEMORY_OPERATION_FAILED
+```
+
+### 3.8 Character / Temporal / Composer Boundary
+
+Phase 3 boundaries remain valid:
+
+- Character definition owns persona/identity/style data, not factual Memory;
+- `Clock` remains the runtime current-time authority;
+- `TemporalContext` remains one derived per-request snapshot;
+- `PromptContextComposer` consumes already-prepared Character, Temporal, and Memory context;
+- Composer does not query persistence, resolve conflicts, learn Memory, call Provider, publish Events, permission-check, or execute Tools;
+- Character fiction cannot override real runtime facts;
+- Character intent and Memory content do not grant Permission.
+
+### 3.9 Provider Layer
+
+Provider-neutral Agent contract:
+
+```python
+async def generate(request: LLMRequest) -> LLMResponse
+```
+
+Concrete current provider:
+
+```text
+DeepSeekProvider
+  -> openai.AsyncOpenAI
+  -> DeepSeek OpenAI-compatible Chat Completions
+```
+
+Current baseline:
+
+```text
+async
+non-streaming
+thinking disabled by default
+60-second default application timeout
+zero automatic SDK retries
+asyncio cancellation propagation
+safe provider-neutral errors
+```
+
+### 3.10 Event System
+
+Phase 2 Event System remains unchanged in principle:
+
+```text
+RuntimeEvent
+EventPublisher
+EventBus
+```
+
+Persistent rule:
+
+```text
+Fact / notification
+-> EventBus
+
+Command / query / request
+-> explicit capability boundary
+```
+
+Memory request/response operations therefore do not use EventBus as RPC.
+
+### 3.11 C# WPF Desktop
+
+Desktop layering now includes Memory management:
+
+```text
+App.xaml.cs
+  -> MainWindow
+  -> MainWindowViewModel
+  -> AgentClientService
+  -> IAgentConnection
+  -> WebSocketAgentConnection
+
+Memory UI
+  -> MemoryManagementViewModel
+  -> IMemoryClientService
+  -> correlated AgentClientService request
+  -> shared WebSocket transport
+```
+
+The Memory ViewModel distinguishes loading, empty, busy, success, failure, selection, history visibility, and connection state.
+
+Desktop Memory operations update local UI state only after a successful server response.
+
+---
 
 ## 4. Current Protocol
 
@@ -386,31 +496,42 @@ Transport:
 ws://127.0.0.1:8765
 ```
 
-Implemented Desktop protocol message behavior:
+Implemented request/response families:
 
-- `chat`
-- `response`
-- `error`
+```text
+chat
+response
+error
 
-Provider error payloads contain stable safe `code` / `message` fields.
+memory.list
+memory.list.result
 
-Documented but not implemented end-to-end:
+memory.inspect
+memory.inspect.result
 
-- Desktop `event`
-- `permission_request`
-- `tool_request`
-- `tool_response`
-- memory / emotion / avatar events
+memory.edit
+memory.edit.result
 
-Important distinction:
+memory.delete
+memory.delete.result
 
-> Python Runtime Events are an internal in-process architecture boundary. They are not automatically Desktop protocol messages.
+memory.history
+memory.history.result
+```
 
-A Desktop Event Bridge remains deferred until a concrete later-phase requirement exists.
+Memory responses correlate through `payload.request_id`.
+
+Provider and Memory failures are mapped to stable Desktop-safe errors rather than exposing raw SDK, SQLAlchemy, SQLite, filesystem, or traceback details.
+
+Internal Python Runtime Events are still not automatically Desktop protocol messages.
+
+Deferred protocol families include future Permission, Tool, proactive Event Bridge, Avatar, and other later-phase capabilities.
+
+---
 
 ## 5. Configuration and Dependency Baseline
 
-Python configuration currently includes:
+Current important runtime configuration includes:
 
 ```text
 DCA_ENVIRONMENT
@@ -418,37 +539,54 @@ DCA_RUNTIME_MODE
 DCA_WEBSOCKET_HOST
 DCA_WEBSOCKET_PORT
 DCA_EVENT_BUS_QUEUE_CAPACITY
+
 DCA_CHARACTER_DEFINITIONS_DIR
 DCA_ACTIVE_CHARACTER_ID
+
+DCA_WORKING_CONTEXT_RETENTION_DAYS
+DCA_MEMORY_DATABASE_PATH
+DCA_AUTOMATIC_LEARNING_ENABLED
+
 DCA_MODEL_PROVIDER
 DCA_DEEPSEEK_API_KEY
 DCA_DEEPSEEK_MODEL
 DCA_DEEPSEEK_TIMEOUT_SECONDS
 DCA_DEEPSEEK_THINKING_ENABLED
+
 DCA_LOG_LEVEL
 ```
 
-EventBus queue capacity:
+Memory defaults:
 
 ```text
-default: 256
-constraint: > 0
-role: operational configuration, not an architecture constant
+working_context retention = 7 days
+allowed retention range = 1..30 days
+automatic learning = enabled
+database path = platform-specific user application-data directory
 ```
 
-Important:
+Canonical Python dependency source:
 
-- real `.env` files are ignored and must never be committed
-- API keys remain local secrets
-- `pyproject.toml` is the canonical Python dependency source
-- `src/agent_core/requirements.txt` remains legacy duplicate metadata and must not receive new dependencies
-- Phases 2 and 3 added no third-party dependency
+```text
+pyproject.toml
+```
+
+Phase 4 persistence/runtime dependencies include:
+
+```text
+sqlalchemy
+aiosqlite
+alembic
+platformdirs
+```
+
+Real `.env` files remain ignored and must never be committed.
+
+---
 
 ## 6. Validation Baseline
 
-### Phase 1 checkpoint
-
-Phase 1 final acceptance on 2026-09-09:
+### Phase 1
 
 ```text
 66 pytest tests passed
@@ -456,180 +594,219 @@ Ruff passed
 mypy passed on 28 source files
 ```
 
-Real acceptance included ConnectionProbe, WPF, DeepSeek, deliberate authentication failure, and sensitive-log inspection.
+### Phase 2
 
-### Phase 2 checkpoint
+```text
+104 passed
+Ruff passed
+mypy passed on 38 source files
+```
 
-Phase 2 final project-owner acceptance on 2026-09-12:
+### Phase 3
+
+```text
+145 passed
+Ruff passed
+mypy passed on 51 source files
+```
+
+### Phase 4
+
+Task 11 final runtime acceptance:
 
 ```text
 python -m pytest -q
--> 104 passed in 4.73s
+-> 355 passed in 10.03s
 
 python -m ruff check .
--> All checks passed!
+-> All checks passed
 
 python -m mypy src
--> Success: no issues found in 38 source files
-```
+-> Success: no issues found in 111 source files
 
-C# build:
-
-```text
-N/A for Phase 2 final acceptance because Phase 2 changed no C# source.
-```
-
-Manual runtime regression:
-
-- Python Agent Core started normally.
-- EventBus logged `event_bus_started queue_capacity=256`.
-- WPF connected successfully.
-- two consecutive WPF messages received real DeepSeek responses.
-- Python observed two successful DeepSeek HTTP 200 responses.
-- EventBus shutdown logged `event_bus_closing` and `event_bus_closed`.
-- the Phase 1 vertical slice remained operational after Phase 2 integration.
-
-Known existing shutdown debt observed during manual acceptance:
-
-- closing WPF may produce `websockets.exceptions.ConnectionClosedError: no close frame received or sent` on the Python server side.
-- this is an existing Desktop/WebSocket shutdown-hardening issue and is not an EventBus shutdown failure.
-
-### Phase 3 checkpoint
-
-Phase 3 final project-owner acceptance on 2026-09-13:
-
-```text
-python -m pytest -q
--> 145 passed in 4.99s
-
-python -m ruff check .
--> All checks passed!
-
-python -m mypy src
--> Success: no issues found in 51 source files
+dotnet build DesktopCompanion.Desktop.slnx
+-> succeeded
 
 git diff --check
 -> clean
 ```
 
-C# build:
+Real Phase 4 acceptance verified:
 
 ```text
-N/A for Phase 3 final acceptance because Phase 3 changed no C# source.
+automatic explicit learning
+non-explicit input not persisted
+SQLite durability
+complete Python Core restart persistence
+retrieval into Provider context
+correction / revision semantics
+delete semantics
+Character scope isolation
+automatic-learning disabled mode
+Memory failure isolation
+WebSocket governance
+WPF governance
+Provider-safe error behavior
+runtime log safety
 ```
 
-Manual runtime acceptance:
+Task 12 storage-location correction was then verified with:
 
-- Python Agent Core started successfully.
-- WPF connected successfully.
-- default Character identified herself as `Aria`.
-- ordinary conversation showed visible Character style without blocking task-oriented use.
-- a real `sqrt(2)` irrationality proof remained mathematically correct.
-- runtime temporal context produced `2026-09-13`, Sunday.
-- the model explicitly preferred verifiable mathematical / scientific reality over conflicting Character settings.
-- real DeepSeek-backed responses returned through WPF.
-- deliberate Provider authentication failure still mapped to the existing safe protocol error boundary.
-- runtime log review did not reveal API keys, Authorization headers, complete user/system prompts, complete model responses, raw response bodies, or reasoning content.
+```text
+355 passed in 10.06s
+Ruff clean
+mypy clean on 111 source files
+```
+
+Real startup without `DCA_MEMORY_DATABASE_PATH` resolved the database under the operating-system user application-data directory, created the database, ran Alembic through `0003_identity_unique`, and started the runtime successfully.
+
+---
 
 ## 7. Development Baseline
 
 Python:
 
-- Python 3.11
-- pytest
-- Ruff
-- mypy
-- `pydantic-settings`
-- `websockets`
-- `openai`
-- editable install through `pip install -e ".[dev]"`
+```text
+Python 3.11
+pytest
+Ruff
+mypy
+pydantic-settings
+websockets
+openai
+SQLAlchemy
+aiosqlite
+Alembic
+platformdirs
+```
 
 Desktop:
 
-- C# WPF
-- target framework: .NET 8 Windows
+```text
+C# WPF
+.NET 8 Windows
+```
 
-Development workflow:
+Normal task workflow:
 
 ```text
-Requirement / Goal
-  -> Context Recovery
-  -> Design
-  -> Architecture Review
-  -> ADR when required
-  -> Task Breakdown
-  -> Implementation
-  -> Targeted pytest / Ruff / mypy
-  -> Working diff review
-  -> Stage specific files
-  -> Staged diff review
-  -> Commit
-  -> Phase-final project-owner acceptance
-  -> Final documentation / checkpoint
+Context Recovery
+-> Goal / Boundary
+-> Design
+-> ADR when justified
+-> Implementation
+-> Targeted verification
+-> Ruff / mypy
+-> Working diff review
+-> Stage explicit files
+-> Staged diff review
+-> Commit
+-> Push
 ```
 
-During implementation, use targeted checks. At a phase-final gate, the project owner runs the complete quality trio:
+Phase-final workflow additionally includes:
 
-```powershell
-python -m pytest -q
-python -m ruff check .
-python -m mypy src
+```text
+full Python regression
+Desktop build when relevant
+real runtime acceptance
+log-safety inspection
+final documentation
+checkpoint
 ```
+
+Repository code and confirmed Git commits outrank stale historical documentation.
+
+---
 
 ## 8. Architectural Principles That Must Not Be Lost
 
-### 8.1 Companion, not a turn-based chatbot
+### 8.1 Companion, not only a turn-based chatbot
 
-The runtime must eventually support proactive output without requiring a user request.
+The long-term runtime must support proactive behavior without requiring every output to begin with a user chat request.
 
-The C# independent receive loop and the Phase 2 Event System both preserve this direction.
+The independent Desktop receive loop and Event System preserve that direction.
 
 ### 8.2 Long-term proactive flow
 
+Target direction remains:
+
 ```text
 External World
-  -> Perception
-  -> Events
-  -> Situation Engine
-  -> Attention Engine
-  -> Behavior Engine
-  -> Voice / Avatar / Tools
+-> Perception
+-> Events
+-> Situation Engine
+-> Attention Engine
+-> Behavior Engine
+-> Voice / Avatar / Tools
 ```
 
-Phase 2 implemented the Event infrastructure layer. Phase 3 added Character, temporal truth, and prompt/context composition. Situation, Attention, Behavior, Perception, Permission, Tools, Voice, and Avatar remain future work.
+Phase 4 Memory provides factual context to future runtime decisions; it does not become the future Decision/Behavior orchestrator.
 
 ### 8.3 Intent != Permission
 
-Character intent never grants system permission.
+Character intent, Memory content, Runtime Events, and future Behavior proposals do not grant Tool or Action authority.
 
-Runtime Events must not be interpreted as implicit authorization.
+Sensitive actions must pass through a dedicated Permission boundary.
 
-Sensitive actions must pass through a dedicated Permission / capability boundary in a later phase.
+### 8.4 Real and fictional state remain separate
 
-### 8.4 Real and fictional state must remain separate
+```text
+Character fiction
+!= factual Memory
 
-Fictional state must not contaminate user facts, factual reasoning, memory retrieval, or tool decisions.
+Relationship Memory
+!= mood / affection / trust Internal State
+```
 
-### 8.5 Local-first, cloud-enhanced
+Fictional Ephemeral State is not persisted as factual Memory.
 
-Target runtime modes remain Offline / Local / Hybrid / Cloud.
+### 8.5 Memory is factual context, not global orchestration
 
-Cloud failure must not erase the companion's basic local runtime behavior.
+Memory owns factual persistence, retrieval, learning, retention/conflict, and governance.
 
-The current implementation has safe Provider failure handling but still has no local fallback router.
+Memory does not own:
 
-### 8.6 Stable interfaces over hidden coupling
+```text
+Character personality
+Internal State
+Behavior decisions
+Permission
+Provider routing
+Tools
+Avatar
+TTS
+```
+
+### 8.6 Event != Command
+
+EventBus remains for facts/notifications.
+
+Synchronous requests, commands, governance, and future capability operations use explicit boundaries.
+
+### 8.7 Local-first, cloud-enhanced
+
+Current default LLM path remains cloud DeepSeek.
+
+The architecture preserves future local capability/fallback work without making a local model a mandatory resident dependency.
+
+### 8.8 Stable interfaces over hidden coupling
 
 Continue using:
 
-- Protocol / interface boundaries
-- adapters
-- Event boundaries
-- dependency injection
-- composition roots
-- explicit lifecycle ownership
+```text
+Protocols / interfaces
+adapters
+repositories
+explicit request routing
+dependency injection
+composition roots
+explicit lifecycle ownership
+```
 
-Do not move Provider, Memory, Tool, Perception, or Agent reasoning logic into the UI.
+UI must not own Agent reasoning, Memory business rules, Provider internals, or Permission logic.
+
+---
 
 ## 9. Important Persistent Decisions
 
@@ -648,122 +825,181 @@ Phase 1 ADRs:
 
 ```text
 0007 async non-streaming Provider contract
-0008 DeepSeek V4 Flash via async OpenAI-compatible Chat Completions
+0008 DeepSeek via async OpenAI-compatible Chat Completions
 0009 Provider error isolation and Desktop error mapping
 ```
 
 Phase 2 ADRs:
 
 ```text
-0010 Runtime Events are facts; commands remain explicit boundaries
+0010 Events are facts; commands remain explicit boundaries
 0011 async bounded in-process EventBus
 0012 fail-fast EventBus overload admission
 ```
-
-ADR 0012 supersedes only the queue-full waiting/backpressure portion of ADR 0011. Other accepted ADR 0011 decisions remain in force.
 
 Phase 3 ADRs:
 
 ```text
 0013 Character definitions are structured domain data
 0014 Character consumes User Context; Memory owns User Profile
-0015 Runtime temporal truth comes from Clock context
+0015 runtime temporal truth comes from Clock context
 ```
 
-## 10. Phase 3 Git Anchors
-
-Confirmed development anchors:
+Phase 4 ADRs:
 
 ```text
-ecc1fce Record Phase 3 character architecture decisions
-e648a19 Establish Phase 3 character domain models
-21e658f Add Character definition loading
-39f8537 Add runtime temporal context
-cb1c5b0 Add Character context composition
-5ecee74 Integrate Character context into runtime
-a172a43 Update Agent integration test fixtures
+0016 factual Memory domains, scopes, lifecycle, and revisions
+0017 SQLite default durable Memory source of truth
+0018 explicit failure-isolated Memory boundaries
+0019 adaptive future runtime decision/capability boundaries
+0020 logical Memory identity key
+0021 explicit runtime routing for request/response capabilities
 ```
 
-The repository `git log --oneline` remains authoritative for complete history.
+`docs/adr/README.md` is the ADR index.
 
-## 11. Known Technical Debt / Cleanup Candidates
+---
 
-1. Desktop WebSocket endpoint remains hard-coded in `App.xaml.cs`; shared endpoint configuration is not implemented.
+## 10. Phase 4 Git Anchors
+
+Important confirmed Phase 4 anchors include:
+
+```text
+6484849 feat(memory): integrate memory retrieval into agent runtime
+
+b64d4d76 feat(memory): establish automatic learning contracts
+ebdc2ce0 feat(memory): add learning eligibility policy
+ca351db feat(memory): add logical memory identity keys
+4fadc5a feat(memory): persist logical memory identity keys
+2d91b09 feat(memory): add logical memory identity lookup
+f2d15ba feat(memory): add existing memory resolver
+066a9dd feat(memory): add learning persistence primitives
+843be83 feat(memory): add automatic memory learning service
+39da336 feat(memory): close automatic learning lifecycle states
+ff49fae feat(memory): add llm memory candidate extractor
+1cf2962 feat(memory): stabilize candidate identity extraction
+
+2831829 feat(memory): add memory health model
+b8cea85 feat(memory): isolate memory retrieval failures
+494c536 feat(memory): isolate automatic learning failures
+3c6672e feat(memory): track governance health failures
+15b58b1 feat(memory): wire memory health runtime
+
+ab0e083 feat(protocol): add runtime message routing boundary
+b4844ab feat(memory): add memory governance protocol handler
+66a51e3 feat(memory): wire websocket governance runtime
+c0c5ecd feat(desktop): add memory protocol contracts
+c8cc364 fix(memory): reject incompatible memory list filters
+0bd1812 test(memory): add websocket governance acceptance
+
+4ee3c5e feat(desktop): add correlated agent requests
+3ca8091 feat(desktop): add memory application service
+ccc6397 feat(desktop): add memory management view model
+804ddc2 feat(desktop): add memory management ui
+94cce5d fix(memory): bootstrap runtime database schema
+3b9aa2b docs(memory): close task 10 acceptance
+
+5d47e1b docs(memory): add task 11 runtime acceptance plan
+eb57eb4 test(memory): add integrated runtime lifecycle acceptance
+1ddfb9e docs(memory): complete phase 4 runtime acceptance
+
+3d7435c fix(memory): use platform app data for default database
+```
+
+The repository Git history remains authoritative for the complete Phase 4 commit sequence.
+
+---
+
+## 11. Known Technical Debt / Deferred Work
+
+Current known debt and intentional deferrals include:
+
+1. Desktop WebSocket endpoint remains hard-coded in `App.xaml.cs`.
 2. C# automated tests still do not exist.
-3. Python `Message` validation remains lightweight; documented protocol versioning is not implemented.
-4. WPF reconnect / retry / connection-state recovery is not implemented.
-5. Desktop shutdown/disposal is not hardened; abrupt WPF disconnect can produce a missing close-frame error in Python WebSocket logs.
+3. WPF reconnect/retry/connection-state recovery remains limited.
+4. Abrupt WPF shutdown may produce a missing WebSocket close-handshake message.
+5. WPF still renders Markdown / LaTeX syntax as plain text.
 6. `src/agent_core/requirements.txt` remains legacy duplicate dependency metadata.
-7. Provider roles remain limited to `system`, `user`, and `assistant`.
-8. streaming remains intentionally unsupported in the current Provider path.
-9. automatic Provider retries remain intentionally unsupported.
-10. local-model / cloud-fallback routing is not implemented.
-11. WPF displays Provider error messages but does not yet implement code-specific UI behavior.
-12. WPF still renders Markdown / LaTeX syntax as plain text.
-13. dynamic Character switching UI is not implemented.
-14. Character hot reload is not implemented.
-15. Memory / User Profile persistence remains future work.
-16. Runtime Events are internal only; there is no Desktop Event Bridge yet.
-17. Event persistence, replay, priority, wildcard routing, dynamic unsubscribe, multiple dispatcher workers, and restart/supervision policy remain intentionally absent from the current Event baseline.
-18. The repository does not yet enforce a canonical text EOL policy through a dedicated `.gitattributes`; keep `git diff --check` in the review workflow.
-19. Generated caches, logs, local `.env`, build outputs, and `.git` must remain excluded from checkpoint/source archives.
+7. Provider streaming and automatic retries remain intentionally unsupported.
+8. Local-model / cloud-fallback routing is not implemented.
+9. Runtime Events remain internal; no Desktop Event Bridge exists.
+10. Event persistence/replay, wildcard routing, subscriber priority, dynamic unsubscribe, multiple workers, and restart supervision remain deferred.
+11. Dynamic Character switching UI and Character hot reload remain deferred.
+12. Memory backup/restore UI, encryption at rest, cloud synchronization, and multi-user accounts are not implemented.
+13. Vector retrieval, embeddings, RAG frameworks, fuzzy semantic identity, and numeric confidence scoring are intentionally absent from Phase 4.
+14. Standalone/package distribution must ensure Alembic migration resources are shipped with the Python runtime.
+15. Phase 4 does not physically guarantee secure erasure from OS/filesystem backups after application-level deletion.
+16. A canonical repository-wide text EOL policy is not yet enforced through dedicated `.gitattributes`.
 
-## 12. Phase 4 Entry Point
+These items should be addressed only when their owning phase or a concrete requirement justifies them.
+
+---
+
+## 12. Phase 5 Entry Point
 
 Next roadmap phase:
 
-> Phase 4 - Memory System
+> Phase 5 - Situation Engine
 
 Goal:
 
-Introduce explicit Memory ownership and separated memory domains without allowing temporary, fictional, or low-confidence state to contaminate factual user context.
+Convert low-level runtime facts/events into higher-level semantic situations without making Situation responsible for Attention, Behavior execution, Permission, or Memory persistence.
 
-Expected scope:
+Expected conceptual position:
 
-- User Profile
-- Working Context
-- Episodic Memory
-- Long-term Memory
-- Relationship Memory
-- Today Memory
-- Fictional Ephemeral State
-- retrieval / persistence / retention / conflict rules
+```text
+Perception / Runtime Facts / Events
+        ↓
+Situation Engine
+        ↓
+semantic Situation
+        ↓
+future Attention Engine
+        ↓
+future Behavior Engine
+```
 
-Phase 4 must preserve:
+Phase 5 must preserve the boundaries established through Phase 4:
 
 ```text
 Character != Memory
 Character != Internal State
-TemporalContext != Memory
-Prompt composition != Permission
+Memory != Situation
+Memory Context != Permission
+Event != Command
 Intent != Permission
 Real State != Fictional State
 ```
 
-Character and `PromptContextComposer` should consume prepared memory/user context rather than owning Memory persistence, retrieval, learning, retention, or conflict behavior.
+Before Phase 5 implementation:
 
-Before implementation:
+```text
+recover repository latest commit
+read Phase 4 checkpoint / final acceptance
+inspect current Event and Memory boundaries
+define Situation inputs/outputs before implementation
+avoid turning Situation into Behavior or Permission logic
+```
 
-- recover context from the Phase 3 checkpoint and current code
-- preserve the verified Provider/WebSocket/EventBus/Character runtime
-- design Memory ownership and retrieval contracts before implementation
-- do not redesign Character merely to make Memory convenient
-- do not allow fictional or ephemeral state to enter factual user-profile storage
+No Situation Engine implementation is part of Phase 4.
+
+---
 
 ## 13. Context Recovery Procedure
 
-When continuing this project in a new conversation/session:
+When continuing the project in a new conversation/session:
 
-1. read `PROJECT_STATE.md`
-2. read `docs/PHASE_3_CHECKPOINT.md`
-3. read `ARCHITECTURE.md`
-4. read `ROADMAP.md`
-5. read `DESIGN.md`
-6. read `TECH_STACK.md`
-7. read `THIRD_PARTY.md`
-8. read `docs/DEVELOPMENT.md`
-9. read the current phase's design / architecture-review / ADR documents
-10. inspect current source files, `git status`, and recent Git history
-11. treat current repository code as authoritative when historical documentation conflicts with implementation
+1. inspect the latest confirmed Git commit and working-tree state;
+2. read `PROJECT_STATE.md`;
+3. read `docs/PHASE_4_TASK11_RUNTIME_ACCEPTANCE_PLAN.md` until the final Phase 4 checkpoint is created;
+4. read `ARCHITECTURE.md`;
+5. read `ROADMAP.md`;
+6. read `docs/adr/README.md` and relevant ADRs;
+7. read `docs/DEVELOPMENT_UNDERSTANDING.md`;
+8. read the current phase design/task documents;
+9. inspect affected source files directly from the repository;
+10. treat current repository code and accepted ADRs as authoritative when historical design documents describe an earlier implementation state.
 
-Historical checkpoint and design documents remain useful for development history but may intentionally describe earlier implementation states. Chat history is supplementary context, not the authoritative project state.
+Historical checkpoints and task plans remain useful development records but may intentionally describe earlier states.
+
+Chat history is supplementary context, not the authoritative project state.

@@ -2,414 +2,803 @@
 
 ## 1. Overview
 
-本文档定义 Desktop Companion Agent 内部模块之间的通信协议。
+This document defines the implemented cross-process protocol between:
 
-主要用于：
+```text
+C# WPF Desktop
+桌面客户端
 
-    C# Desktop Layer
+    ↕ local WebSocket / JSON
 
-            ↕
+Python Agent Core
+智能体核心
+```
 
-    Python Agent Core
+Current endpoint defaults to:
 
-未来扩展：
+```text
+ws://127.0.0.1:8765
+```
 
--   Mobile Client
--   Plugin System
--   External Tools
--   Local Services
+The protocol currently supports:
 
-------------------------------------------------------------------------
+```text
+chat request / response
+聊天请求 / 响应
 
-# 2. Design Principles
+Memory governance request / response
+记忆治理请求 / 响应
 
-## 2.1 Event Driven
+safe error messages
+安全错误消息
+```
 
-系统采用事件驱动思想。
+The Python in-process EventBus is a separate runtime mechanism.
 
-通信双方不直接调用对方内部方法。
+```text
+WebSocket protocol
+跨进程请求 / 响应
 
-而是发送：
+!=
 
-    Message
+Runtime EventBus
+进程内事实 / 通知
+```
 
-接收：
+Do not use EventBus as hidden request/response RPC.
 
-    Event
+---
 
-优点：
+## 2. Message Envelope
 
--   模块解耦
--   易扩展
--   支持主动行为
+All implemented cross-process messages use the same JSON envelope:
 
-------------------------------------------------------------------------
-
-## 2.2 JSON Based
-
-第一版本采用：
-
-    JSON
-
-作为数据格式。
-
-原因：
-
--   人类可读
--   调试方便
--   跨语言支持
-
-------------------------------------------------------------------------
-
-# 3. Message Structure
-
-所有消息统一格式：
-
-``` json
+```json
 {
-    "id": "message_unique_id",
-    "type": "message_type",
-    "timestamp": "ISO8601",
-    "source": "sender",
-    "payload": {}
+  "id": "message-uuid-or-request-id",
+  "type": "message_type",
+  "timestamp": "ISO8601 timestamp",
+  "source": "sender",
+  "payload": {}
 }
 ```
 
-字段说明：
+Fields:
 
-  字段        说明
-  ----------- --------------
-  id          消息唯一编号
-  type        消息类型
-  timestamp   时间
-  source      发送方
-  payload     具体内容
+| Field | Meaning |
+| --- | --- |
+| `id` | Unique message/request identity |
+| `type` | Protocol message type |
+| `timestamp` | Message timestamp |
+| `source` | Logical sender |
+| `payload` | Message-type-specific object |
 
-------------------------------------------------------------------------
+Python `Message` serializes all five fields.
 
-# 4. Message Types
+The Desktop uses the same envelope through `AgentMessage`.
 
-## 4.1 Chat Message
+---
 
-用户主动聊天。
+## 3. Runtime Routing
 
-Example:
+Python routes implemented request types through:
 
-``` json
-{
-    "id":"001",
-    "type":"chat",
-    "source":"desktop",
-    "payload":{
-        "message":"你好"
-    }
-}
-```
-
-流程：
-
-    User
-
+```text
+WebSocketServer
     ↓
+RuntimeMessageRouter
+    ├── chat
+    │    -> Agent
+    │
+    └── memory.*
+         -> MemoryProtocolHandler
+```
 
-    Desktop
+Unsupported request families return an `error` Message.
 
+This routing boundary is explicit because:
+
+```text
+request / command / query
+!=
+Runtime Event
+```
+
+---
+
+## 4. Chat Protocol
+
+### 4.1 Chat Request
+
+Type:
+
+```text
+chat
+```
+
+Payload:
+
+```json
+{
+  "message": "你好"
+}
+```
+
+Example envelope:
+
+```json
+{
+  "id": "request-id",
+  "type": "chat",
+  "timestamp": "2026-09-25T12:00:00+00:00",
+  "source": "desktop",
+  "payload": {
+    "message": "你好"
+  }
+}
+```
+
+### 4.2 Chat Success Response
+
+Type:
+
+```text
+response
+```
+
+Payload:
+
+```json
+{
+  "message": "你好，我在这里。"
+}
+```
+
+Example:
+
+```json
+{
+  "id": "response-id",
+  "type": "response",
+  "timestamp": "2026-09-25T12:00:01+00:00",
+  "source": "Desktop Companion",
+  "payload": {
+    "message": "你好，我在这里。"
+  }
+}
+```
+
+The ordinary chat response currently does not use `payload.request_id`.
+
+Memory governance requests use explicit correlation as documented below.
+
+---
+
+## 5. Provider-Safe Chat Errors
+
+Provider failures are translated into stable safe protocol errors.
+
+Error type:
+
+```text
+error
+```
+
+Current Provider error codes:
+
+| Code | Safe message |
+| --- | --- |
+| `PROVIDER_NOT_CONFIGURED` | `AI provider is not configured.` |
+| `PROVIDER_AUTHENTICATION_FAILED` | `AI provider authentication failed.` |
+| `PROVIDER_QUOTA_EXHAUSTED` | `AI provider quota or balance is insufficient.` |
+| `PROVIDER_RATE_LIMITED` | `AI provider is rate-limited. Please try again later.` |
+| `PROVIDER_TIMEOUT` | `AI provider request timed out.` |
+| `PROVIDER_UNAVAILABLE` | `AI provider is temporarily unavailable.` |
+| `PROVIDER_REQUEST_FAILED` | `AI provider rejected the request.` |
+| `PROVIDER_INVALID_RESPONSE` | `AI provider returned an invalid response.` |
+| `PROVIDER_ERROR` | `AI provider request failed.` |
+
+Example:
+
+```json
+{
+  "id": "response-id",
+  "type": "error",
+  "timestamp": "2026-09-25T12:00:01+00:00",
+  "source": "Desktop Companion",
+  "payload": {
+    "code": "PROVIDER_TIMEOUT",
+    "message": "AI provider request timed out."
+  }
+}
+```
+
+Provider-internal SDK exceptions, API keys, Authorization headers, raw response bodies, full prompts, and reasoning content must not become the Desktop protocol contract.
+
+---
+
+## 6. Memory Governance Protocol
+
+Phase 4 implements explicit Memory governance request/response capabilities:
+
+```text
+memory.list
+memory.inspect
+memory.edit
+memory.delete
+memory.history
+```
+
+Success result types:
+
+```text
+memory.list.result
+memory.inspect.result
+memory.edit.result
+memory.delete.result
+memory.history.result
+```
+
+Memory protocol responses correlate to the original request through:
+
+```text
+request Message.id
     ↓
+response payload.request_id
+```
 
-    Agent Core
+This allows the Desktop to run correlated request/response operations while preserving the independent receive loop.
 
-------------------------------------------------------------------------
+---
 
-## 4.2 Agent Response
+## 7. Memory Domain Values
 
-Agent回复。
+Implemented protocol domain strings:
 
-Example:
+```text
+user_profile
+working_context
+episodic
+relationship
+```
 
-``` json
+Scope kinds:
+
+```text
+global_user
+character
+```
+
+Domain/scope compatibility:
+
+```text
+user_profile     -> global_user
+working_context  -> global_user
+episodic         -> global_user
+relationship     -> character
+```
+
+Lifecycle strings:
+
+```text
+active
+superseded
+expired
+deleted
+```
+
+Source strings:
+
+```text
+user_edit
+user_explicit
+automatic_explicit_fact
+system_observed
+```
+
+---
+
+## 8. Memory Scope Payload
+
+Global-user scope:
+
+```json
 {
-    "id":"002",
-    "type":"response",
-    "source":"agent",
-    "payload":{
-        "message":"你好，我在这里。"
+  "kind": "global_user"
+}
+```
+
+Character scope:
+
+```json
+{
+  "kind": "character",
+  "character_id": "aria"
+}
+```
+
+A `global_user` scope must not define a Character ID.
+
+A `character` scope requires a non-empty `character_id`.
+
+---
+
+## 9. Memory Entry Payload
+
+A serialized visible Memory entry has this shape:
+
+```json
+{
+  "memory_id": "uuid",
+  "domain": "user_profile",
+  "scope": {
+    "kind": "global_user",
+    "character_id": null
+  },
+  "identity_key": "preferred_language",
+  "latest_revision": {
+    "revision_number": 2,
+    "content": "The user prefers C#.",
+    "source": "user_edit",
+    "lifecycle": "active",
+    "recorded_at": "2026-09-25T12:00:00+00:00",
+    "occurred_at": null
+  }
+}
+```
+
+`identity_key` may be `null`.
+
+`occurred_at` may be `null`.
+
+Deleted revisions have `content = null` according to the Memory domain contract.
+
+---
+
+## 10. `memory.list`
+
+### Request
+
+Type:
+
+```text
+memory.list
+```
+
+Allowed payload fields:
+
+```text
+domain
+scope
+```
+
+Both are optional.
+
+Examples:
+
+List all visible Memory:
+
+```json
+{}
+```
+
+Filter by domain:
+
+```json
+{
+  "domain": "working_context"
+}
+```
+
+Filter by Character Relationship scope:
+
+```json
+{
+  "domain": "relationship",
+  "scope": {
+    "kind": "character",
+    "character_id": "aria"
+  }
+}
+```
+
+If both `domain` and `scope` are present, they must be compatible.
+
+### Success Response
+
+Type:
+
+```text
+memory.list.result
+```
+
+Payload:
+
+```json
+{
+  "request_id": "original-request-id",
+  "memories": []
+}
+```
+
+`memories` contains visible non-deleted Memory entries.
+
+---
+
+## 11. `memory.inspect`
+
+### Request
+
+Type:
+
+```text
+memory.inspect
+```
+
+Exact payload:
+
+```json
+{
+  "memory_id": "memory-uuid"
+}
+```
+
+### Success Response
+
+Type:
+
+```text
+memory.inspect.result
+```
+
+Payload:
+
+```json
+{
+  "request_id": "original-request-id",
+  "memory": {
+    "memory_id": "memory-uuid",
+    "domain": "working_context",
+    "scope": {
+      "kind": "global_user",
+      "character_id": null
+    },
+    "identity_key": "task11_acceptance_code",
+    "latest_revision": {
+      "revision_number": 1,
+      "content": "Example content",
+      "source": "automatic_explicit_fact",
+      "lifecycle": "active",
+      "recorded_at": "2026-09-25T12:00:00+00:00",
+      "occurred_at": null
     }
+  }
 }
 ```
 
-------------------------------------------------------------------------
+---
 
-## 4.3 Event Message
+## 12. `memory.edit`
 
-系统事件。
+### Request
 
-用途：
+Type:
 
-未来：
+```text
+memory.edit
+```
 
--   软件启动
--   文件变化
--   时间提醒
--   天气变化
+Exact payload:
 
-Example:
-
-``` json
+```json
 {
-    "id":"003",
-    "type":"event",
-    "source":"system",
-    "payload":{
-        "event":"application_started"
+  "memory_id": "memory-uuid",
+  "content": "Corrected factual content"
+}
+```
+
+`content` must be a non-empty string.
+
+### Success Response
+
+Type:
+
+```text
+memory.edit.result
+```
+
+Payload:
+
+```json
+{
+  "request_id": "original-request-id",
+  "memory": {
+    "memory_id": "memory-uuid",
+    "domain": "working_context",
+    "scope": {
+      "kind": "global_user",
+      "character_id": null
+    },
+    "identity_key": "task11_acceptance_code",
+    "latest_revision": {
+      "revision_number": 2,
+      "content": "Corrected factual content",
+      "source": "user_edit",
+      "lifecycle": "active",
+      "recorded_at": "2026-09-25T12:10:00+00:00",
+      "occurred_at": null
     }
+  }
 }
 ```
 
-------------------------------------------------------------------------
+Revision/conflict semantics are owned by Python Memory governance, not by the Desktop protocol model.
 
-## 4.4 Permission Request
+---
 
-需要用户授权。
+## 13. `memory.delete`
 
-Example:
+### Request
 
-``` json
+Type:
+
+```text
+memory.delete
+```
+
+Exact payload:
+
+```json
 {
-    "id":"004",
-    "type":"permission_request",
-    "source":"agent",
-    "payload":{
-        "action":"read_file",
-        "target":"example.txt"
+  "memory_id": "memory-uuid"
+}
+```
+
+### Success Response
+
+Type:
+
+```text
+memory.delete.result
+```
+
+Payload contains:
+
+```json
+{
+  "request_id": "original-request-id",
+  "memory": {
+    "memory_id": "memory-uuid",
+    "domain": "working_context",
+    "scope": {
+      "kind": "global_user",
+      "character_id": null
+    },
+    "identity_key": "task11_acceptance_code",
+    "latest_revision": {
+      "revision_number": 3,
+      "content": null,
+      "source": "user_edit",
+      "lifecycle": "deleted",
+      "recorded_at": "2026-09-25T12:15:00+00:00",
+      "occurred_at": null
     }
+  }
 }
 ```
 
-原则：
+Deletion semantics remain a Memory governance/domain concern.
 
-Agent不能绕过权限。
+---
 
-------------------------------------------------------------------------
+## 14. `memory.history`
 
-## 4.5 Tool Request
+### Request
 
-工具调用。
+Type:
 
-Example:
+```text
+memory.history
+```
 
-``` json
+Exact payload:
+
+```json
 {
-    "id":"005",
-    "type":"tool_request",
-    "source":"agent",
-    "payload":{
-        "tool":"web_search",
-        "parameters":{
-            "query":"weather"
-        }
+  "memory_id": "memory-uuid"
+}
+```
+
+### Success Response
+
+Type:
+
+```text
+memory.history.result
+```
+
+Payload:
+
+```json
+{
+  "request_id": "original-request-id",
+  "memory_id": "memory-uuid",
+  "revisions": [
+    {
+      "revision_number": 1,
+      "content": "Original factual content",
+      "source": "automatic_explicit_fact",
+      "lifecycle": "superseded",
+      "recorded_at": "2026-09-25T12:00:00+00:00",
+      "occurred_at": null
+    },
+    {
+      "revision_number": 2,
+      "content": "Corrected factual content",
+      "source": "user_edit",
+      "lifecycle": "active",
+      "recorded_at": "2026-09-25T12:10:00+00:00",
+      "occurred_at": null
     }
+  ]
 }
 ```
 
-------------------------------------------------------------------------
+Normal governance history follows the Memory deletion/redaction contract and must not be treated as an unrestricted forensic export.
 
-# 5. Communication Flow
+---
 
-## User Chat
+## 15. Memory Protocol Errors
 
-    User
+Memory protocol failures return:
 
-     ↓
+```text
+type = error
+```
 
-    Desktop
+and include correlation:
 
-     ↓
-
-    chat message
-
-     ↓
-
-    Agent Core
-
-     ↓
-
-    response
-
-     ↓
-
-    Desktop
-
-     ↓
-
-    User
-
-------------------------------------------------------------------------
-
-## Agent主动行为
-
-未来：
-
-    System Event
-
-     ↓
-
-    Agent Core
-
-     ↓
-
-    Decision
-
-     ↓
-
-    Agent Message
-
-     ↓
-
-    Desktop
-
-------------------------------------------------------------------------
-
-# 6. Error Message
-
-统一错误格式：
-
-``` json
+```json
 {
-    "type":"error",
-    "payload":{
-        "code":"NETWORK_ERROR",
-        "message":"Connection failed"
-    }
+  "request_id": "original-request-id",
+  "code": "MEMORY_INVALID_REQUEST",
+  "message": "Invalid Memory request."
 }
 ```
 
-## 6.1 Phase 1 Provider Errors
+Stable Phase 4 codes:
 
-Phase 1 中，LLM Provider 失败通过统一 `error` Message 返回 Desktop。
+| Code | Safe message |
+| --- | --- |
+| `MEMORY_INVALID_REQUEST` | `Invalid Memory request.` |
+| `MEMORY_NOT_FOUND` | `Memory does not exist.` |
+| `MEMORY_DELETED` | `Memory is deleted.` |
+| `MEMORY_INVALID_STATE` | `Memory is in an invalid state for this operation.` |
+| `MEMORY_OPERATION_FAILED` | `Memory operation failed.` |
 
-Provider 内部诊断信息、SDK 异常、API Key、Prompt、Reasoning Content 和原始响应体不能通过协议暴露。
+Raw SQLite, SQLAlchemy, filesystem, traceback, or other infrastructure diagnostics must not be exposed through these errors.
 
-Provider error codes：
+---
 
-| Code | Message | Meaning |
-| --- | --- | --- |
-| `PROVIDER_NOT_CONFIGURED` | `AI provider is not configured.` | Provider 配置缺失或无效 |
-| `PROVIDER_AUTHENTICATION_FAILED` | `AI provider authentication failed.` | Provider 身份验证失败 |
-| `PROVIDER_QUOTA_EXHAUSTED` | `AI provider quota or balance is insufficient.` | Provider 配额或余额不足 |
-| `PROVIDER_RATE_LIMITED` | `AI provider is rate-limited. Please try again later.` | Provider 限流 |
-| `PROVIDER_TIMEOUT` | `AI provider request timed out.` | Provider 请求超时 |
-| `PROVIDER_UNAVAILABLE` | `AI provider is temporarily unavailable.` | Provider 网络连接失败或服务暂时不可用 |
-| `PROVIDER_REQUEST_FAILED` | `AI provider rejected the request.` | Provider 拒绝请求 |
-| `PROVIDER_INVALID_RESPONSE` | `AI provider returned an invalid response.` | Provider 返回无法满足统一契约的响应 |
-| `PROVIDER_ERROR` | `AI provider request failed.` | 未进一步分类的 Provider 错误 |
+## 16. Base WebSocket Input Errors
 
-Example:
+The WebSocket server currently maps malformed transport/protocol input to safe `error` Messages.
 
-``` json
-{
-    "type":"error",
-    "source":"Desktop Companion",
-    "payload":{
-        "code":"PROVIDER_TIMEOUT",
-        "message":"AI provider request timed out."
-    }
-}
+Examples include:
+
+```text
+Binary messages are not supported
+Invalid JSON message
+Invalid message structure
+Unsupported message type
 ```
 
-当前 WPF Desktop 仍可只读取 `payload.message`。`payload.code` 为稳定的机器可读错误类别，供后续 UI 行为使用。
+These older/base errors do not all use the same machine-readable `payload.code` convention as Provider and Memory errors.
 
-Phase 0 已存在的非 Provider 错误将在各自协议维护任务中逐步统一，本节不改变其当前运行行为。
+Do not assume a code exists unless the specific protocol family defines one.
 
-------------------------------------------------------------------------
+---
 
-# 7. Version Control
+## 17. Internal Events Are Not Desktop Protocol Messages
 
-协议版本：
+The Python EventBus is internal and in-process.
 
-    v1
+Current Runtime Events are facts / notifications and do not automatically cross the WebSocket boundary.
 
-未来：
+Therefore the following are **not current implemented Desktop message families merely because they appear in the long-term architecture**:
 
-    v2
-
-需要保持兼容。
-
-格式：
-
-``` json
-{
-    "version":"1.0"
-}
+```text
+event
+permission_request
+tool_request
+memory_update
+emotion_change
+avatar_action
+tool_response
 ```
 
-------------------------------------------------------------------------
+They remain future protocol work unless a later phase explicitly defines and implements them.
 
-# 8. Security Rules
+This prevents architecture sketches from being mistaken for accepted runtime contracts.
 
-## Permission First
+---
 
-任何涉及：
+## 18. Permission Rule
 
--   文件
--   网络
--   系统操作
+Persistent rule:
 
-必须经过：
-
-    Permission Layer
-
-Agent自主性：
-
-不能超过：
-
-用户授权。
-
-------------------------------------------------------------------------
-
-# 9. Future Extension
-
-## Memory Event
-
-``` json
-{
-"type":"memory_update"
-}
+```text
+Intent != Permission
+意图 != 权限
 ```
 
-## Emotion Event
+Neither Character intent, Memory content, Runtime Events, nor future Situation/Behavior output grants permission to perform sensitive operations.
 
-``` json
-{
-"type":"emotion_change"
-}
+Future sensitive Tool/Action protocol families must preserve a dedicated Permission boundary.
+
+---
+
+## 19. Protocol Evolution
+
+When adding or changing a cross-process capability:
+
+```text
+1. identify ownership and boundary
+2. define request / response / error semantics
+3. update protocol documentation
+4. implement Python and Desktop contracts as applicable
+5. add automated tests
+6. run cross-process acceptance when needed
+7. preserve safe error mapping
 ```
 
-## Avatar Event
+Do not silently add a protocol shape in one language only.
 
-``` json
-{
-"type":"avatar_action"
-}
+Do not use EventBus as a substitute for explicit synchronous request/response capabilities.
+
+A formal negotiated protocol-version field is not currently implemented in the accepted envelope.
+
+---
+
+## 20. Current Implemented Summary
+
+Implemented Phase 4 cross-process protocol:
+
+```text
+chat
+  -> response / error
+
+memory.list
+  -> memory.list.result / error
+
+memory.inspect
+  -> memory.inspect.result / error
+
+memory.edit
+  -> memory.edit.result / error
+
+memory.delete
+  -> memory.delete.result / error
+
+memory.history
+  -> memory.history.result / error
 ```
 
-## Tool Result
+Memory request/response correlation:
 
-``` json
-{
-"type":"tool_response"
-}
+```text
+request.id
+-> response.payload.request_id
 ```
 
-------------------------------------------------------------------------
+Current architectural boundary:
 
-# 10. Summary
+```text
+Desktop
+  -> WebSocket / JSON
+  -> RuntimeMessageRouter
+       |- chat -> Agent
+       `- memory.* -> MemoryProtocolHandler
 
-通信协议负责：
-
-    连接 Desktop
-
-    连接 Agent
-
-    连接未来所有模块
-
-它是整个 Desktop Companion Agent 的基础通信契约。
+EventBus remains internal and separate.
+```
