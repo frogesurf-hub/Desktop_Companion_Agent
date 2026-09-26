@@ -88,17 +88,20 @@ class Agent:
     """
     Agent 核心逻辑。
 
-    当前阶段负责：
-    - 接收协议 Message
-    - 转换为 Provider-neutral LLM 请求
+    当前负责：
+    - 接收 chat 协议 Message
+    - 读取注入的 Character / Clock / MemoryRetriever 上下文
+    - 通过 PromptContextComposer 生成 Provider-neutral LLM 请求
     - 调用注入的 LLM Provider
+    - 在 Provider 成功响应后可选执行 MemoryTurnLearner
     - 将 Provider 响应转换回协议 Message
     - 将 Provider 错误转换为安全的协议 error Message
 
-    后续会继续接入：
-    - Memory
-    - Behavior
-    - Tool
+    当前不负责：
+    - Memory 持久化实现
+    - Memory Governance
+    - Situation / Attention / Behavior
+    - Permission / Tool 执行
     """
 
     def __init__(
