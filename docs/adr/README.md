@@ -45,3 +45,8 @@ Phase 4 ADRs:
 - `0019-adaptive-runtime-behavior-decision-and-capability-boundaries.md`
 - `0020-logical-memory-identity-key.md`
 - `0021-explicit-runtime-routing-for-request-response-capabilities.md`
+
+Phase 5 ADRs:
+
+- `0022-situation-evidence-lifecycle-and-ownership.md` — Accepted
+- `0023-situation-runtime-query-and-notification-boundaries.md` — Accepted

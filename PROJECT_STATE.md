@@ -1,6 +1,6 @@
 # Desktop Companion Agent - Project State
 
-> Context checkpoint: Phase 4 Memory System runtime acceptance completed; Task 12 final documentation is in progress.
+> Context checkpoint: Phase 4 is complete at 75a7e5c. Phase 5 Task 1 design and ADRs are accepted; Task 2 contracts are next. Implementation has not started.
 >
 > This file is the primary current-state recovery document. Repository code and the latest confirmed Git commit remain the source of truth when historical documents describe an earlier phase.
 
@@ -12,8 +12,31 @@ Current phase status:
 - Phase 1 - LLM Provider / Original AI MVP: **Complete**
 - Phase 2 - Event System: **Complete**
 - Phase 3 - Character System: **Complete**
-- Phase 4 - Memory System: **Complete / final documentation in progress**
-- Next roadmap phase: **Phase 5 - Situation Engine**
+- Phase 4 - Memory System: **Complete**
+- Phase 5 - Situation Engine: **Task 1 design accepted; Task 2 contracts next; not implemented**
+
+Latest confirmed Phase 4 closure commit:
+
+```text
+75a7e5c docs: complete phase 4 closure
+```
+
+Phase 5 scope directions accepted by owner on 2026-09-27:
+
+- deterministic rules first;
+- internal Situation capability and inspectable acceptance before Prompt integration;
+- engineering workflow first, concise understanding support without a teaching-question gate.
+
+Current Phase 5 documents:
+
+- `docs/PHASE_5_SITUATION_ENGINE_DESIGN.md`
+- `docs/PHASE_5_ARCHITECTURE_REVIEW.md`
+- `docs/PHASE_5_TASK_PLAN.md`
+- Accepted ADR 0022 / 0023
+
+Next development entry point: Task 2 contract design after confirming the Task 1
+containing commit and a clean working tree. No Phase 5 implementation or new
+runtime quality-gate result is claimed by this documentation checkpoint.
 
 Latest confirmed implementation checkpoint before Task 12 documentation synchronization:
 
@@ -937,9 +960,15 @@ These items should be addressed only when their owning phase or a concrete requi
 
 ## 12. Phase 5 Entry Point
 
-Next roadmap phase:
+Current design phase:
 
 > Phase 5 - Situation Engine
+
+The accepted direction is deterministic rules first and internal capability
+acceptance before prompt integration. The proposed initial scenarios are recent
+chat interaction and repeated transient Provider failure, using actual runtime
+facts. Desktop/Unity observation remains future Perception work. Refer to the
+Phase 5 design and task plan for proposed contracts; they are not implemented.
 
 Goal:
 
